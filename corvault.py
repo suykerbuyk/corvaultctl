@@ -1,11 +1,12 @@
+#!/bin/python3
 import base64
 import sys
 import urllib.request
 import xml.dom.minidom
 import ssl
 
-username = 'TEST'
-password = 'TEST!'
+username = 'manage'
+password = 'Testit123!'
 # For the following, the protocol (HTTP or HTTPS) must be specified; for example,
 # https://10.235.221.121
 if sys.argv[1]:
