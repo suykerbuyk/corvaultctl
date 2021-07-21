@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
+	//	"net/http/httputil"
 	"strings"
 	//	"os"
 	"time"
@@ -71,8 +71,8 @@ func main() {
 	}
 	req.Header.Add("Authorization", "Basic "+auth_string)
 	req.Header.Add("dataType", "json")
-	dump, err := httputil.DumpRequestOut(req, false)
-	fmt.Printf("%s", dump)
+	//dump, err := httputil.DumpRequestOut(req, false)
+	//fmt.Printf("%s", dump)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -93,21 +93,19 @@ func main() {
 	}
 	//decodeStr, err := json.MarshalIndent(authStatus, "", "  ")
 	//fmt.Println(string(decodeStr))
-	statusCnt := len(authStatus.List)
-	if statusCnt < 1 {
+	if 1 > len(authStatus.List) {
 		log.Fatal("Error, no status report present")
 	}
-	fmt.Println("Status Report Count = ", statusCnt)
-	for idx := 0; idx < statusCnt; idx++ {
-		fmt.Println("                 meta: ", authStatus.List[idx].Meta)
-		fmt.Println("          object-name: ", authStatus.List[idx].ObjectName)
-		fmt.Println("             response: ", authStatus.List[idx].Response)
-		fmt.Println("        response-type: ", authStatus.List[idx].ResponseType)
-		fmt.Println("response-type-numeric: ", authStatus.List[idx].ResponseTypeNumeric)
-		fmt.Println("          return-code: ", authStatus.List[idx].ReturnCode)
-		fmt.Println("         component-id: ", authStatus.List[idx].ComponentId)
-		fmt.Println("           time-stamp: ", authStatus.List[idx].TimeStamp)
-		fmt.Println("   time-stamp-numeric: ", authStatus.List[idx].TimeStampNumeric)
+	for _, auth := range authStatus.List {
+		fmt.Println("                 meta:", auth.Meta)
+		fmt.Println("          object-name:", auth.ObjectName)
+		fmt.Println("             response:", auth.Response)
+		fmt.Println("        response-type:", auth.ResponseType)
+		fmt.Println("response-type-numeric:", auth.ResponseTypeNumeric)
+		fmt.Println("          return-code:", auth.ReturnCode)
+		fmt.Println("         component-id:", auth.ComponentId)
+		fmt.Println("           time-stamp:", auth.TimeStamp)
+		fmt.Println("   time-stamp-numeric:", auth.TimeStampNumeric)
 	}
 	if authStatus.List[0].ReturnCode != 1 {
 		log.Fatal("API return code was not \"1\" : ", authStatus.List[0].ReturnCode)
@@ -123,8 +121,6 @@ func main() {
 	}
 	req.Header.Add("dataType", "json")
 	req.Header.Add("sessionKey", sessionKey)
-	//dump, err = httputil.DumpRequestOut(req, false)
-	//fmt.Printf("%s", dump)
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -136,29 +132,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//fmt.Printf("\nResponse Body:\n%s\n", body)
 	certStatus := new(CertificateStatusList)
 	err = json.Unmarshal(body, &certStatus)
 	if err != nil {
 		log.Fatal(err)
 	}
-	certCnt := len(certStatus.List)
-	if certCnt < 1 {
+	if 1 > len(certStatus.List) {
 		log.Fatal("Error, no certificate report present")
 	}
-	fmt.Println("Certificate Report Count = ", certCnt)
-	for idx := 0; idx < certCnt; idx++ {
-		fmt.Println("               object-name: ", certStatus.List[idx].ObjectName)
-		fmt.Println("                      meta: ", certStatus.List[idx].Meta)
-		fmt.Println("                controller: ", certStatus.List[idx].Controller)
-		fmt.Println("        controller-numeric: ", certStatus.List[idx].ControllerNumeric)
-		fmt.Println("        certificate-status: ", certStatus.List[idx].CertificateStatus)
-		fmt.Println("certificant-status-numeric: ", certStatus.List[idx].CertificateStatusNumeric)
-		fmt.Println("          certificate-time: ", certStatus.List[idx].CertificateTime)
-		fmt.Println("     certificate-signature: ", certStatus.List[idx].CertificateSignature)
+	for _, cert := range certStatus.List {
+		fmt.Println("               object-name: ", cert.ObjectName)
+		fmt.Println("                      meta: ", cert.Meta)
+		fmt.Println("                controller: ", cert.Controller)
+		fmt.Println("        controller-numeric: ", cert.ControllerNumeric)
+		fmt.Println("        certificate-status: ", cert.CertificateStatus)
+		fmt.Println("certificant-status-numeric: ", cert.CertificateStatusNumeric)
+		fmt.Println("          certificate-time: ", cert.CertificateTime)
+		fmt.Println("     certificate-signature: ", cert.CertificateSignature)
 		//fmt.Printf("          certificate-text: %s\n", certStatus.List[idx].CertificateText)
-		certStatus.List[idx].CertificateTextList = strings.Split(certStatus.List[idx].CertificateText, "\\n")
-		for _, v := range certStatus.List[idx].CertificateTextList {
+		cert.CertificateTextList = strings.Split(cert.CertificateText, "\\n")
+		for _, v := range cert.CertificateTextList {
 			fmt.Println(v)
 		}
 	}
