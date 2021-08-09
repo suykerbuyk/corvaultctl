@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
+	//	"net/http/httputil"
 	"strings"
 	//	"os"
 	"time"
@@ -40,15 +40,15 @@ func OpenSession(tgtCreds *CorvaultCreds) (err error, client *http.Client) {
 	}
 	req.Header.Add("Authorization", "Basic "+auth_string)
 	req.Header.Add("dataType", "json")
-	dump, err := httputil.DumpRequestOut(req, false)
-	fmt.Printf("%s", dump)
+	//dump, err := httputil.DumpRequestOut(req, false)
+	//fmt.Printf("%s", dump)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err, nil
 	}
 	defer resp.Body.Close()
-	fmt.Println("response Status: ", resp.Status)
-	fmt.Println("response Header: ", resp.Header)
+	//fmt.Println("response Status: ", resp.Status)
+	//fmt.Println("response Header: ", resp.Header)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err, nil
@@ -95,12 +95,12 @@ func FetchCertificates(tgtCreds *CorvaultCreds, client *http.Client) (certs *Cvt
 	if 1 > len(certs.Certificate) {
 		log.Fatal("Error, no certificate report present")
 	}
-	fmt.Println("Dumping the request:")
-	dump, err := httputil.DumpRequestOut(req, false)
-	fmt.Printf("%s", dump)
-	fmt.Println("Dumping the response:")
-	dump, err = httputil.DumpResponse(resp, true)
-	fmt.Println("Dump Complete")
+	//fmt.Println("Dumping the request:")
+	//dump, err := httputil.DumpRequestOut(req, false)
+	//fmt.Printf("%s", dump)
+	//fmt.Println("Dumping the response:")
+	//dump, err = httputil.DumpResponse(resp, true)
+	//fmt.Println("Dump Complete")
 	return
 }
 func DumpCertificates(certs *CvtCertificates) {
