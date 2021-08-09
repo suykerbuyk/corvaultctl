@@ -4,103 +4,77 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
+	//	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	//	"net/http/httputil"
+	"net/http/httputil"
 	"strings"
 	//	"os"
 	"time"
 )
 
-type CorvaultCtx struct {
+type CorvaultCreds struct {
 	Host string `json:"ConnectionHost"`
 	User string `json:"ConnectionUser"`
 	Pass string `json:"ConnectionPass"`
 	Key  string `json:"Key"`
 }
+type CorvaultCtx struct {
+	Credentials CorvaultCreds
+	Client      http.Client
+}
 
-func OpenSession(tgtCtx *CorvaultCtx) (client *http.Client, err error) {
-	auth_string := base64.StdEncoding.EncodeToString([]byte(tgtCtx.User + ":" + tgtCtx.Pass))
+func OpenSession(tgtCreds *CorvaultCreds) (err error, client *http.Client) {
+	auth_string := base64.StdEncoding.EncodeToString([]byte(tgtCreds.User + ":" + tgtCreds.Pass))
 	fmt.Println("Base64 auth_string = " + auth_string)
-	url := tgtCtx.Host + "/api/login"
+	url := tgtCreds.Host + "/api/login"
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client = &http.Client{Timeout: time.Second * 5, Transport: tr}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return err, nil
 	}
 	req.Header.Add("Authorization", "Basic "+auth_string)
 	req.Header.Add("dataType", "json")
-	//dump, err := httputil.DumpRequestOut(req, false)
-	//fmt.Printf("%s", dump)
+	dump, err := httputil.DumpRequestOut(req, false)
+	fmt.Printf("%s", dump)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return err, nil
 	}
 	defer resp.Body.Close()
 	fmt.Println("response Status: ", resp.Status)
 	fmt.Println("response Header: ", resp.Header)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return err, nil
 	}
-	authStatus := new(AuthStatusList)
-	err = json.Unmarshal(body, &authStatus)
+	var status CvtResponseStatus
+	err = json.Unmarshal(body, &status)
 	if err != nil {
-		return nil, err
+		log.Fatal("OpenSession Failed: ", err)
 	}
-	//decodeStr, err := json.MarshalIndent(authStatus, "", "  ")
-	//fmt.Println(string(decodeStr))
-	if 1 > len(authStatus.List) {
-		err = errors.New("Error, no status report present")
-		return nil, err
+	if status.Status[0].ReturnCode != 1 {
+		log.Fatal("OpenSession : API return code was not \"1\" : ", status.Status[0].ReturnCode)
 	}
-	for _, auth := range authStatus.List {
-		fmt.Println("                 meta:", auth.Meta)
-		fmt.Println("          object-name:", auth.ObjectName)
-		fmt.Println("             response:", auth.Response)
-		fmt.Println("        response-type:", auth.ResponseType)
-		fmt.Println("response-type-numeric:", auth.ResponseTypeNumeric)
-		fmt.Println("          return-code:", auth.ReturnCode)
-		fmt.Println("         component-id:", auth.ComponentId)
-		fmt.Println("           time-stamp:", auth.TimeStamp)
-		fmt.Println("   time-stamp-numeric:", auth.TimeStampNumeric)
-	}
-	if authStatus.List[0].ReturnCode != 1 {
-		log.Fatal("API return code was not \"1\" : ", authStatus.List[0].ReturnCode)
-	}
-	tgtCtx.Key = authStatus.List[0].Response
-	fmt.Printf("sessionKey=%s\n", tgtCtx.Key)
+	tgtCreds.Key = status.Status[0].Response
+	fmt.Printf("sessionKey=%s\n", tgtCreds.Key)
+	fmt.Println(status)
 	return
 
 }
-
-func main() {
-	var SessionCtx = CorvaultCtx{
-		Host: "https://corvault-2a",
-		User: "manage",
-		Pass: "Testit123!",
-		Key:  "",
-	}
-
-	client, err := OpenSession(&SessionCtx)
-	if err != nil {
-		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
-		log.Fatal(err)
-	}
-
-	url := SessionCtx.Host + "/api/show/certificate"
+func FetchCertificates(tgtCreds *CorvaultCreds, client *http.Client) (certs *CvtCertificates, err error) {
+	url := tgtCreds.Host + "/api/show/certificate"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	req.Header.Add("dataType", "json")
-	req.Header.Add("sessionKey", SessionCtx.Key)
+	req.Header.Add("sessionKey", tgtCreds.Key)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -112,15 +86,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	certStatus := new(CertificateStatusList)
-	err = json.Unmarshal(body, &certStatus)
+	fmt.Println(string(body))
+	certs = new(CvtCertificates)
+	err = json.Unmarshal(body, &certs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if 1 > len(certStatus.List) {
+	if 1 > len(certs.Certificate) {
 		log.Fatal("Error, no certificate report present")
 	}
-	for _, cert := range certStatus.List {
+	fmt.Println("Dumping the request:")
+	dump, err := httputil.DumpRequestOut(req, false)
+	fmt.Printf("%s", dump)
+	fmt.Println("Dumping the response:")
+	dump, err = httputil.DumpResponse(resp, true)
+	fmt.Println("Dump Complete")
+	return
+}
+func DumpCertificates(certs *CvtCertificates) {
+	for _, cert := range certs.Certificate {
 		fmt.Println("               object-name: ", cert.ObjectName)
 		fmt.Println("                      meta: ", cert.Meta)
 		fmt.Println("                controller: ", cert.Controller)
@@ -129,10 +113,33 @@ func main() {
 		fmt.Println("certificant-status-numeric: ", cert.CertificateStatusNumeric)
 		fmt.Println("          certificate-time: ", cert.CertificateTime)
 		fmt.Println("     certificate-signature: ", cert.CertificateSignature)
-		//fmt.Printf("          certificate-text: %s\n", certStatus.List[idx].CertificateText)
-		cert.CertificateTextList = strings.Split(cert.CertificateText, "\\n")
-		for _, v := range cert.CertificateTextList {
+		//	fmt.Printf("          certificate-text: %s\n", cert.CertificateText)
+		CertificateTextList := strings.Split(cert.CertificateText, "\\n")
+		for _, v := range CertificateTextList {
 			fmt.Println(v)
 		}
+
 	}
+	//fmt.Println("GetCertificates Status: ", certs.Response)
+}
+func main() {
+	var sessionCreds = CorvaultCreds{
+		Host: "https://corvault-2a",
+		User: "manage",
+		Pass: "Testit123!",
+		Key:  "",
+	}
+
+	err, client := OpenSession(&sessionCreds)
+	if err != nil {
+		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
+		log.Fatal(err)
+	}
+	//DumpAuthStatusList(authStatus)
+	certStatus, err := FetchCertificates(&sessionCreds, client)
+	if err != nil {
+		err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
+		log.Fatal(err)
+	}
+	DumpCertificates(certStatus)
 }
