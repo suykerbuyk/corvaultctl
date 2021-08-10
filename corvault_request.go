@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -21,7 +23,7 @@ type CvtResponseStatus struct {
 	} `json:"status"`
 }
 
-func (s CvtResponseStatus) String() string {
+func (s *CvtResponseStatus) String() string {
 	prettyJSON, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		log.Fatal(fmt.Errorf("ResponseStatus to JSON string error: " + err.Error()))
@@ -42,6 +44,26 @@ type CvtCertificates struct {
 		CertificateText          string `json:"certificate-text"`
 	} `json:"certificate-status"`
 	Response CvtResponseStatus
+}
+
+func (c *CvtCertificates) String() string {
+	var b bytes.Buffer
+	for _, cert := range c.Certificate {
+		fmt.Fprintln(&b, "               object-name: ", cert.ObjectName)
+		fmt.Fprintln(&b, "                      meta: ", cert.Meta)
+		fmt.Fprintln(&b, "                controller: ", cert.Controller)
+		fmt.Fprintln(&b, "        controller-numeric: ", cert.ControllerNumeric)
+		fmt.Fprintln(&b, "        certificate-status: ", cert.CertificateStatus)
+		fmt.Fprintln(&b, "certificant-status-numeric: ", cert.CertificateStatusNumeric)
+		fmt.Fprintln(&b, "          certificate-time: ", cert.CertificateTime)
+		fmt.Fprintln(&b, "     certificate-signature: ", cert.CertificateSignature)
+		CertificateTextList := strings.Split(cert.CertificateText, "\\n")
+		for _, v := range CertificateTextList {
+			fmt.Fprintln(&b, v)
+		}
+
+	}
+	return (b.String())
 }
 
 type CvtDiskGroup struct {
@@ -759,5 +781,149 @@ type CvtHostPortStatistics struct {
 		StopSampleTime         string `json:"stop-sample-time"`
 		StopSampleTimeNumeric  int    `json:"stop-sample-time-numeric"`
 	} `json:"host-port-statistics"`
+	Status CvtResponseStatus
+}
+
+type CvtAdvancedSettings struct {
+	AdvancedSettingsTable []struct {
+		ObjectName                             string `json:"object-name"`
+		Meta                                   string `json:"meta"`
+		BackgroundScrub                        string `json:"background-scrub"`
+		BackgroundScrubNumeric                 int    `json:"background-scrub-numeric"`
+		BackgroundScrubInterval                int    `json:"background-scrub-interval"`
+		PartnerFirmwareUpgrade                 string `json:"partner-firmware-upgrade"`
+		PartnerFirmwareUpgradeNumeric          int    `json:"partner-firmware-upgrade-numeric"`
+		UtilityPriority                        string `json:"utility-priority"`
+		UtilityPriorityNumeric                 int    `json:"utility-priority-numeric"`
+		Smart                                  string `json:"smart"`
+		SmartNumeric                           int    `json:"smart-numeric"`
+		DynamicSpares                          string `json:"dynamic-spares"`
+		EmpPollRate                            string `json:"emp-poll-rate"`
+		HostCacheControl                       string `json:"host-cache-control"`
+		HostCacheControlNumeric                int    `json:"host-cache-control-numeric"`
+		SyncCacheMode                          string `json:"sync-cache-mode"`
+		SyncCacheModeNumeric                   int    `json:"sync-cache-mode-numeric"`
+		IndependentCache                       string `json:"independent-cache"`
+		IndependentCacheNumeric                int    `json:"independent-cache-numeric"`
+		MissingLunResponse                     string `json:"missing-lun-response"`
+		MissingLunResponseNumeric              int    `json:"missing-lun-response-numeric"`
+		ControllerFailure                      string `json:"controller-failure"`
+		ControllerFailureNumeric               int    `json:"controller-failure-numeric"`
+		SuperCapFailure                        string `json:"super-cap-failure"`
+		SuperCapFailureNumeric                 int    `json:"super-cap-failure-numeric"`
+		MemoryCardFailure                      string `json:"memory-card-failure"`
+		MemoryCardFailureNumeric               int    `json:"memory-card-failure-numeric"`
+		PowerSupplyFailure                     string `json:"power-supply-failure"`
+		PowerSupplyFailureNumeric              int    `json:"power-supply-failure-numeric"`
+		FanFailure                             string `json:"fan-failure"`
+		FanFailureNumeric                      int    `json:"fan-failure-numeric"`
+		TemperatureExceeded                    string `json:"temperature-exceeded"`
+		TemperatureExceededNumeric             int    `json:"temperature-exceeded-numeric"`
+		PartnerNotify                          string `json:"partner-notify"`
+		PartnerNotifyNumeric                   int    `json:"partner-notify-numeric"`
+		AutoWriteBack                          string `json:"auto-write-back"`
+		AutoWriteBackNumeric                   int    `json:"auto-write-back-numeric"`
+		DiskDsdEnable                          string `json:"disk-dsd-enable"`
+		DiskDsdEnableNumeric                   int    `json:"disk-dsd-enable-numeric"`
+		DiskDsdDelay                           int    `json:"disk-dsd-delay"`
+		BackgroundDiskScrub                    string `json:"background-disk-scrub"`
+		BackgroundDiskScrubNumeric             int    `json:"background-disk-scrub-numeric"`
+		ManagedLogs                            string `json:"managed-logs"`
+		ManagedLogsNumeric                     int    `json:"managed-logs-numeric"`
+		SingleController                       string `json:"single-controller"`
+		SingleControllerNumeric                int    `json:"single-controller-numeric"`
+		AutoStallRecovery                      string `json:"auto-stall-recovery"`
+		AutoStallRecoveryNumeric               int    `json:"auto-stall-recovery-numeric"`
+		DeleteOverride                         string `json:"delete-override"`
+		DeleteOverrideNumeric                  int    `json:"delete-override-numeric"`
+		RestartOnCapiFail                      string `json:"restart-on-capi-fail"`
+		RestartOnCapiFailNumeric               int    `json:"restart-on-capi-fail-numeric"`
+		LargePools                             string `json:"large-pools"`
+		LargePoolsNumeric                      int    `json:"large-pools-numeric"`
+		SsdConcurrentAccess                    string `json:"ssd-concurrent-access"`
+		SsdConcurrentAccessNumeric             int    `json:"ssd-concurrent-access-numeric"`
+		SlotAffinity                           string `json:"slot-affinity"`
+		SlotAffinityNumeric                    int    `json:"slot-affinity-numeric"`
+		RandomIoPerformanceOptimization        string `json:"random-io-performance-optimization"`
+		RandomIoPerformanceOptimizationNumeric int    `json:"random-io-performance-optimization-numeric"`
+		CacheFlushTimeout                      string `json:"cache-flush-timeout"`
+		CacheFlushTimeoutNumeric               int    `json:"cache-flush-timeout-numeric"`
+		Remanufacture                          string `json:"remanufacture"`
+		RemanufactureNumeric                   int    `json:"remanufacture-numeric"`
+		HedgedReadsTimeout                     string `json:"hedged-reads-timeout"`
+		HedgedReadsTimeoutNumeric              int    `json:"hedged-reads-timeout-numeric"`
+	} `json:"advanced-settings-table"`
+	Status CvtResponseStatus
+}
+
+type CvtSystem struct {
+	System []struct {
+		ObjectName               string `json:"object-name"`
+		Meta                     string `json:"meta"`
+		SystemName               string `json:"system-name"`
+		SystemContact            string `json:"system-contact"`
+		SystemLocation           string `json:"system-location"`
+		SystemInformation        string `json:"system-information"`
+		MidplaneSerialNumber     string `json:"midplane-serial-number"`
+		URL                      string `json:"url"`
+		VendorName               string `json:"vendor-name"`
+		ProductID                string `json:"product-id"`
+		ProductBrand             string `json:"product-brand"`
+		ScsiVendorID             string `json:"scsi-vendor-id"`
+		ScsiProductID            string `json:"scsi-product-id"`
+		EnclosureCount           int    `json:"enclosure-count"`
+		Health                   string `json:"health"`
+		HealthNumeric            int    `json:"health-numeric"`
+		HealthReason             string `json:"health-reason"`
+		OtherMCStatus            string `json:"other-MC-status"`
+		OtherMCStatusNumeric     int    `json:"other-MC-status-numeric"`
+		PfuStatus                string `json:"pfuStatus"`
+		PfuStatusNumeric         int    `json:"pfuStatus-numeric"`
+		SupportedLocales         string `json:"supported-locales"`
+		CurrentNodeWwn           string `json:"current-node-wwn"`
+		FdeSecurityStatus        string `json:"fde-security-status"`
+		FdeSecurityStatusNumeric int    `json:"fde-security-status-numeric"`
+		PlatformType             string `json:"platform-type"`
+		PlatformTypeNumeric      int    `json:"platform-type-numeric"`
+		PlatformBrand            string `json:"platform-brand"`
+		PlatformBrandNumeric     int    `json:"platform-brand-numeric"`
+		Redundancy               []struct {
+			ObjectName               string `json:"object-name"`
+			Meta                     string `json:"meta"`
+			RedundancyMode           string `json:"redundancy-mode"`
+			RedundancyModeNumeric    int    `json:"redundancy-mode-numeric"`
+			RedundancyStatus         string `json:"redundancy-status"`
+			RedundancyStatusNumeric  int    `json:"redundancy-status-numeric"`
+			ControllerAStatus        string `json:"controller-a-status"`
+			ControllerAStatusNumeric int    `json:"controller-a-status-numeric"`
+			ControllerASerialNumber  string `json:"controller-a-serial-number"`
+			ControllerBStatus        string `json:"controller-b-status"`
+			ControllerBStatusNumeric int    `json:"controller-b-status-numeric"`
+			ControllerBSerialNumber  string `json:"controller-b-serial-number"`
+			OtherMCStatus            string `json:"other-MC-status"`
+			OtherMCStatusNumeric     int    `json:"other-MC-status-numeric"`
+			SystemReady              string `json:"system-ready"`
+			SystemReadyNumeric       int    `json:"system-ready-numeric"`
+			LocalReady               string `json:"local-ready"`
+			LocalReadyNumeric        int    `json:"local-ready-numeric"`
+			LocalReason              string `json:"local-reason"`
+			OtherReady               string `json:"other-ready"`
+			OtherReadyNumeric        int    `json:"other-ready-numeric"`
+			OtherReason              string `json:"other-reason"`
+		} `json:"redundancy"`
+		UnhealthyComponent []struct {
+			ObjectName           string `json:"object-name"`
+			Meta                 string `json:"meta"`
+			ComponentType        string `json:"component-type"`
+			ComponentTypeNumeric int    `json:"component-type-numeric"`
+			ComponentID          string `json:"component-id"`
+			Basetype             string `json:"basetype"`
+			PrimaryKey           string `json:"primary-key"`
+			Health               string `json:"health"`
+			HealthNumeric        int    `json:"health-numeric"`
+			HealthReason         string `json:"health-reason"`
+			HealthRecommendation string `json:"health-recommendation"`
+		} `json:"unhealthy-component"`
+	} `json:"system"`
 	Status CvtResponseStatus
 }
