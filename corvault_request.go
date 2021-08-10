@@ -22,13 +22,45 @@ type CvtResponseStatus struct {
 		TimeStampNumeric    int    `json:"time-stamp-numeric"`
 	} `json:"status"`
 }
+type CvtApiStatus []struct {
+	ObjectName          string `json:"object-name"`
+	Meta                string `json:"meta"`
+	ResponseType        string `json:"response-type"`
+	ResponseTypeNumeric int    `json:"response-type-numeric"`
+	Response            string `json:"response"`
+	ReturnCode          int    `json:"return-code"`
+	ComponentID         string `json:"component-id"`
+	TimeStamp           string `json:"time-stamp"`
+	TimeStampNumeric    int    `json:"time-stamp-numeric"`
+}
 
-func (s *CvtResponseStatus) String() string {
+func (s *CvtResponseStatus) Json() string {
 	prettyJSON, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		log.Fatal(fmt.Errorf("ResponseStatus to JSON string error: " + err.Error()))
 	}
 	return string(prettyJSON)
+}
+
+func (c *CvtCertificates) Text() []string {
+	var ret []string
+	for _, cert := range c.Certificate {
+		var b bytes.Buffer
+		fmt.Fprintln(&b, "               object-name: ", cert.ObjectName)
+		fmt.Fprintln(&b, "                      meta: ", cert.Meta)
+		fmt.Fprintln(&b, "                controller: ", cert.Controller)
+		fmt.Fprintln(&b, "        controller-numeric: ", cert.ControllerNumeric)
+		fmt.Fprintln(&b, "        certificate-status: ", cert.CertificateStatus)
+		fmt.Fprintln(&b, "certificant-status-numeric: ", cert.CertificateStatusNumeric)
+		fmt.Fprintln(&b, "          certificate-time: ", cert.CertificateTime)
+		fmt.Fprintln(&b, "     certificate-signature: ", cert.CertificateSignature)
+		CertificateTextList := strings.Split(cert.CertificateText, "\\n")
+		for _, v := range CertificateTextList {
+			fmt.Fprintln(&b, v)
+		}
+		ret = append(ret, b.String())
+	}
+	return (ret)
 }
 
 type CvtCertificates struct {
@@ -43,30 +75,19 @@ type CvtCertificates struct {
 		CertificateSignature     string `json:"certificate-signature"`
 		CertificateText          string `json:"certificate-text"`
 	} `json:"certificate-status"`
-	Response CvtResponseStatus
+	//Response CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
-func (c *CvtCertificates) String() string {
-	var b bytes.Buffer
-	for _, cert := range c.Certificate {
-		fmt.Fprintln(&b, "               object-name: ", cert.ObjectName)
-		fmt.Fprintln(&b, "                      meta: ", cert.Meta)
-		fmt.Fprintln(&b, "                controller: ", cert.Controller)
-		fmt.Fprintln(&b, "        controller-numeric: ", cert.ControllerNumeric)
-		fmt.Fprintln(&b, "        certificate-status: ", cert.CertificateStatus)
-		fmt.Fprintln(&b, "certificant-status-numeric: ", cert.CertificateStatusNumeric)
-		fmt.Fprintln(&b, "          certificate-time: ", cert.CertificateTime)
-		fmt.Fprintln(&b, "     certificate-signature: ", cert.CertificateSignature)
-		CertificateTextList := strings.Split(cert.CertificateText, "\\n")
-		for _, v := range CertificateTextList {
-			fmt.Fprintln(&b, v)
-		}
-
+func (s *CvtCertificates) Json() string {
+	prettyJSON, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Fatal(fmt.Errorf("CvtCertificates to JSON string error: " + err.Error()))
 	}
-	return (b.String())
+	return string(prettyJSON)
 }
 
-type CvtDiskGroup struct {
+type CvtDiskGroups struct {
 	DiskGroups []struct {
 		ObjectName                       string `json:"object-name"`
 		Meta                             string `json:"meta"`
@@ -175,11 +196,19 @@ type CvtDiskGroup struct {
 			HealthRecommendationNumeric int    `json:"health-recommendation-numeric"`
 		} `json:"health-conditions"`
 	} `json:"disk-groups"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
+}
+
+func (s CvtDiskGroups) Json() string {
+	prettyJSON, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Fatal(fmt.Errorf("CvtDiskGroups to JSON string error: " + err.Error()))
+	}
+	return string(prettyJSON)
 }
 
 type CvtDiskGroupStatistics struct {
-	DiskGroupStatistics []struct {
+	Statistics []struct {
 		ObjectName            string `json:"object-name"`
 		Meta                  string `json:"meta"`
 		SerialNumber          string `json:"serial-number"`
@@ -203,7 +232,7 @@ type CvtDiskGroupStatistics struct {
 }
 
 type CvtDiskParameters struct {
-	DriveParameters []struct {
+	Parameters []struct {
 		ObjectName                 string `json:"object-name"`
 		Meta                       string `json:"meta"`
 		Smart                      string `json:"smart"`

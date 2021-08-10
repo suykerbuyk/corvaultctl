@@ -58,31 +58,9 @@ func OpenSession(ctx *CorvaultCtx) (err error) {
 		return fmt.Errorf("OpenSession : API return code was not \"1\" %d : ", status.Status[0].ReturnCode)
 	}
 	ctx.Credential.Key = status.Status[0].Response
-	fmt.Printf("sessionKey=%s\n", ctx.Credential.Key)
+	//fmt.Printf("sessionKey=%s\n", ctx.Credential.Key)
 	return
 
-}
-func (ctx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
-	buffer, err := ctx.Show("certificate")
-	if err != nil {
-		return nil, fmt.Errorf("GetCertificate - CorvaultCtx.Show certificate failed: %w", err)
-	}
-	//fmt.Println(string(buffer))
-	certs = new(CvtCertificates)
-	err = json.Unmarshal(buffer, &certs)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if 1 > len(certs.Certificate) {
-		return nil, fmt.Errorf("GetCertificate - No Certificates present!")
-	}
-	//fmt.Println("Dumping the request:")
-	//dump, err := httputil.DumpRequestOut(req, false)
-	//fmt.Printf("%s", dump)
-	//fmt.Println("Dumping the response:")
-	//dump, err = httputil.DumpResponse(resp, true)
-	//fmt.Println("Dump Complete")
-	return
 }
 func (ctx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
 	url := ctx.Credential.Host + "api/show/" + aspect
@@ -97,11 +75,50 @@ func (ctx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
 		return nil, fmt.Errorf("CorvaultCtx.Show - ctx.Client.Do failed for %s: %w", url, err)
 	}
 	defer resp.Body.Close()
+	//fmt.Println("Dumping the request:")
+	//dump, err := httputil.DumpRequestOut(req, false)
+	//fmt.Printf("%s", dump)
+	//fmt.Println("Dumping the response:")
+	//dump, err := httputil.DumpResponse(resp, true)
+	//fmt.Printf("%s", dump)
+	//fmt.Println("Dump Complete")
 	//fmt.Println("response Status: ", resp.Status)
 	//fmt.Println("response Header: ", resp.Header)
 	buffer, err = ioutil.ReadAll(resp.Body)
+	//fmt.Println(string(buffer))
 	if err != nil {
 		return nil, fmt.Errorf("CorvaultCtx.Show - ioutil.Readall for http body failed for %s: %w", url, err)
+	}
+	return
+}
+func (ctx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
+	buffer, err := ctx.Show("certificate")
+	if err != nil {
+		return nil, fmt.Errorf("GetCertificate - CorvaultCtx.Show certificate failed: %w", err)
+	}
+	certs = new(CvtCertificates)
+	err = json.Unmarshal(buffer, &certs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if 1 > len(certs.Certificate) {
+		return nil, fmt.Errorf("GetCertificate - No Certificates present!")
+	}
+	return
+}
+func (ctx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
+	buffer, err := ctx.Show("disk-groups")
+	if err != nil {
+		return nil, fmt.Errorf("CorvaultCtx.Show disk-groups failed: %w", err)
+	}
+	dgs = new(CvtDiskGroups)
+	fmt.Println(string(buffer))
+	err = json.Unmarshal(buffer, &dgs)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal json data: %w", err)
+	}
+	if 1 > len(dgs.DiskGroups) {
+		return nil, fmt.Errorf("No Disk Groups Present!")
 	}
 	return
 }
@@ -124,5 +141,11 @@ func main() {
 		err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
 		log.Fatal(err)
 	}
-	fmt.Println(certStatus)
+	fmt.Println(certStatus.Text())
+	diskGroups, err := ctx.GetDiskGroups()
+	if err != nil {
+		err = fmt.Errorf("GetDiskGroups Failed: %v", err.Error())
+		log.Fatal(err)
+	}
+	fmt.Println(diskGroups.Json())
 }
