@@ -62,33 +62,19 @@ func OpenSession(ctx *CorvaultCtx) (err error) {
 	return
 
 }
-func FetchCertificates(ctx *CorvaultCtx) (certs *CvtCertificates, err error) {
-	url := ctx.Credential.Host + "api/show/certificate"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (ctx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
+	buffer, err := ctx.Show("certificate")
 	if err != nil {
-		return nil, fmt.Errorf("FetchCertificates - http.NewRequest failed: %w", err)
+		return nil, fmt.Errorf("GetCertificate - CorvaultCtx.Show certificate failed: %w", err)
 	}
-	req.Header.Add("dataType", "json")
-	req.Header.Add("sessionKey", ctx.Credential.Key)
-	resp, err := ctx.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("FetchCertificates - Client.Do Failed: %w", err)
-	}
-	defer resp.Body.Close()
-	//fmt.Println("response Status: ", resp.Status)
-	//fmt.Println("response Header: ", resp.Header)
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("FetchCertificates - ioutil.ReadAll from body failed: %w", err)
-	}
-	//fmt.Println(string(body))
+	//fmt.Println(string(buffer))
 	certs = new(CvtCertificates)
-	err = json.Unmarshal(body, &certs)
+	err = json.Unmarshal(buffer, &certs)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if 1 > len(certs.Certificate) {
-		return nil, fmt.Errorf("FetchCertificates - No Certificates present!")
+		return nil, fmt.Errorf("GetCertificate - No Certificates present!")
 	}
 	//fmt.Println("Dumping the request:")
 	//dump, err := httputil.DumpRequestOut(req, false)
@@ -98,7 +84,7 @@ func FetchCertificates(ctx *CorvaultCtx) (certs *CvtCertificates, err error) {
 	//fmt.Println("Dump Complete")
 	return
 }
-func (ctx *CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
+func (ctx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
 	url := ctx.Credential.Host + "api/show/" + aspect
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -133,7 +119,7 @@ func main() {
 		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
 		log.Fatal(err)
 	}
-	certStatus, err := FetchCertificates(&ctx)
+	certStatus, err := ctx.GetCertificate()
 	if err != nil {
 		err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
 		log.Fatal(err)
