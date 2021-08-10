@@ -122,6 +122,22 @@ func (ctx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
 	}
 	return
 }
+func (ctx CorvaultCtx) GetDiskGroupStatistics() (data *CvtDiskGroupStatistics, err error) {
+	buffer, err := ctx.Show("disk-group-statistics")
+	if err != nil {
+		return nil, fmt.Errorf("CorvaultCtx.Show disk-group-statistics failed: %w", err)
+	}
+	data = new(CvtDiskGroupStatistics)
+	fmt.Println(string(buffer))
+	err = json.Unmarshal(buffer, &data)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal json data: %w", err)
+	}
+	if 1 > len(data.Statistics) {
+		return nil, fmt.Errorf("No Disk Group Statistics Present!")
+	}
+	return
+}
 func main() {
 	cfg, err := GetCvtConfig()
 	if err != nil {
@@ -136,16 +152,22 @@ func main() {
 		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
 		log.Fatal(err)
 	}
-	certStatus, err := ctx.GetCertificate()
+	//certStatus, err := ctx.GetCertificate()
+	//if err != nil {
+	//	err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
+	//	log.Fatal(err)
+	//}
+	//fmt.Println(certStatus.Text())
+	//diskGroups, err := ctx.GetDiskGroups()
+	//if err != nil {
+	//	err = fmt.Errorf("GetDiskGroups Failed: %v", err.Error())
+	//	log.Fatal(err)
+	//}
+	//fmt.Println(diskGroups.Json())
+	diskGroupStatistics, err := ctx.GetDiskGroupStatistics()
 	if err != nil {
-		err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
+		err = fmt.Errorf("GetDiskGroupStatistics Failed: %v", err.Error())
 		log.Fatal(err)
 	}
-	fmt.Println(certStatus.Text())
-	diskGroups, err := ctx.GetDiskGroups()
-	if err != nil {
-		err = fmt.Errorf("GetDiskGroups Failed: %v", err.Error())
-		log.Fatal(err)
-	}
-	fmt.Println(diskGroups.Json())
+	fmt.Println(diskGroupStatistics.Json())
 }

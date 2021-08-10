@@ -215,20 +215,28 @@ type CvtDiskGroupStatistics struct {
 		Name                  string `json:"name"`
 		TimeSinceReset        int    `json:"time-since-reset"`
 		TimeSinceSample       int    `json:"time-since-sample"`
-		NumberOfReads         int64  `json:"number-of-reads"`
-		NumberOfWrites        int64  `json:"number-of-writes"`
+		NumberOfReads         uint64 `json:"number-of-reads"`
+		NumberOfWrites        uint64 `json:"number-of-writes"`
 		DataRead              string `json:"data-read"`
-		DataReadNumeric       int64  `json:"data-read-numeric"`
+		DataReadNumeric       uint64 `json:"data-read-numeric"`
 		DataWritten           string `json:"data-written"`
-		DataWrittenNumeric    int64  `json:"data-written-numeric"`
+		DataWrittenNumeric    uint64 `json:"data-written-numeric"`
 		BytesPerSecond        string `json:"bytes-per-second"`
-		BytesPerSecondNumeric int64  `json:"bytes-per-second-numeric"`
+		BytesPerSecondNumeric uint64 `json:"bytes-per-second-numeric"`
 		Iops                  int    `json:"iops"`
 		AvgRspTime            int    `json:"avg-rsp-time"`
 		AvgReadRspTime        int    `json:"avg-read-rsp-time"`
 		AvgWriteRspTime       int    `json:"avg-write-rsp-time"`
 	} `json:"disk-group-statistics"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
+}
+
+func (s CvtDiskGroupStatistics) Json() string {
+	prettyJSON, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Fatal(fmt.Errorf("CvtDiskGroupStatistics to JSON string error: " + err.Error()))
+	}
+	return string(prettyJSON)
 }
 
 type CvtDiskParameters struct {
@@ -248,7 +256,7 @@ type CvtDiskParameters struct {
 		Remanufacture              string `json:"remanufacture"`
 		RemanufactureNumeric       int    `json:"remanufacture-numeric"`
 	} `json:"drive-parameters"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtDisks struct {
@@ -368,7 +376,7 @@ type CvtDisks struct {
 		HealthRecommendation        string `json:"health-recommendation"`
 		HealthRecommendationNumeric int    `json:"health-recommendation-numeric"`
 	} `json:"drives"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtVolumes struct {
@@ -459,7 +467,7 @@ type CvtVolumes struct {
 		VolumeGroup                       string `json:"volume-group"`
 		GroupKey                          string `json:"group-key"`
 	} `json:"volumes"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtVolumeNames struct {
@@ -470,7 +478,7 @@ type CvtVolumeNames struct {
 		SerialNumber string `json:"serial-number"`
 		Volume       string `json:"volume"`
 	} `json:"volume-names"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtPwrSupplies struct {
@@ -513,7 +521,7 @@ type CvtPwrSupplies struct {
 		Status                    string `json:"status"`
 		StatusNumeric             int    `json:"status-numeric"`
 	} `json:"power-supplies"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtSensors struct {
@@ -535,7 +543,7 @@ type CvtSensors struct {
 		SensorType          string `json:"sensor-type"`
 		SensorTypeNumeric   int    `json:"sensor-type-numeric"`
 	} `json:"sensors"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtProvisioning struct {
@@ -555,7 +563,7 @@ type CvtProvisioning struct {
 		HealthNumeric     int    `json:"health-numeric"`
 		Mapped            string `json:"mapped"`
 	} `json:"provisioning"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtVersions struct {
@@ -597,7 +605,7 @@ type CvtVersions struct {
 		PubsVersion                   string    `json:"pubs-version"`
 		TranslationVersion            string    `json:"translation-version"`
 	} `json:"versions"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtDnsMgmtHostnames struct {
@@ -611,7 +619,7 @@ type CvtDnsMgmtHostnames struct {
 		DefaultHostname        string `json:"default-hostname"`
 		DefaultHostnameNumeric int    `json:"default-hostname-numeric"`
 	} `json:"mgmt-hostnames"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtInquiry struct {
@@ -645,7 +653,7 @@ type CvtInquiry struct {
 		IP64Address                 string `json:"ip64-address"`
 		NvramDefaults               string `json:"nvram-defaults"`
 	} `json:"inquiry"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtVolumeStatistics struct {
@@ -679,7 +687,7 @@ type CvtVolumeStatistics struct {
 		IP64Address                 string `json:"ip64-address"`
 		NvramDefaults               string `json:"nvram-defaults"`
 	} `json:"inquiry"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtReservations struct {
@@ -699,7 +707,7 @@ type CvtReservations struct {
 		ReserveType              string `json:"reserve-type"`
 		ReserveTypeNumeric       int    `json:"reserve-type-numeric"`
 	} `json:"volume-reservations"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtHostGroups struct {
@@ -768,7 +776,7 @@ type CvtHostGroups struct {
 			HostPortBitsB      int    `json:"host-port-bits-b"`
 		} `json:"initiator"`
 	} `json:"host"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtHostPhyStatistics struct {
@@ -782,7 +790,7 @@ type CvtHostPhyStatistics struct {
 		InvalidDwords     string `json:"invalid-dwords"`
 		ResetErrorCounter string `json:"reset-error-counter"`
 	} `json:"sas-host-phy-statistics"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtHostPortStatistics struct {
@@ -810,7 +818,7 @@ type CvtHostPortStatistics struct {
 		StopSampleTime         string `json:"stop-sample-time"`
 		StopSampleTimeNumeric  int    `json:"stop-sample-time-numeric"`
 	} `json:"host-port-statistics"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtAdvancedSettings struct {
@@ -882,7 +890,7 @@ type CvtAdvancedSettings struct {
 		HedgedReadsTimeout                     string `json:"hedged-reads-timeout"`
 		HedgedReadsTimeoutNumeric              int    `json:"hedged-reads-timeout-numeric"`
 	} `json:"advanced-settings-table"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
 
 type CvtSystem struct {
@@ -954,5 +962,5 @@ type CvtSystem struct {
 			HealthRecommendation string `json:"health-recommendation"`
 		} `json:"unhealthy-component"`
 	} `json:"system"`
-	Status CvtResponseStatus
+	Status CvtApiStatus `json:"status"`
 }
