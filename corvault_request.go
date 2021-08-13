@@ -34,7 +34,7 @@ type CvtApiStatus []struct {
 	TimeStampNumeric    int    `json:"time-stamp-numeric"`
 }
 
-func (s *CvtResponseStatus) Json() string {
+func (s *CvtApiStatus) Json() string {
 	prettyJSON, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		log.Fatal(fmt.Errorf("ResponseStatus to JSON string error: " + err.Error()))
@@ -963,4 +963,12 @@ type CvtSystem struct {
 		} `json:"unhealthy-component"`
 	} `json:"system"`
 	Status CvtApiStatus `json:"status"`
+}
+
+func (s CvtSystem) Json() string {
+	prettyJSON, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Fatal(fmt.Errorf("CvtSystem to JSON string error: " + err.Error()))
+	}
+	return string(prettyJSON)
 }

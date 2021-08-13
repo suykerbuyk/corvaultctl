@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	//	"errors"
 	"fmt"
@@ -21,8 +20,6 @@ type CorvaultCtx struct {
 }
 
 func OpenSession(ctx *CorvaultCtx) (err error) {
-	auth_string := base64.StdEncoding.EncodeToString([]byte(ctx.Credential.User + ":" + ctx.Credential.Pass))
-	//fmt.Println("Base64 auth_string = " + auth_string)
 	url := ctx.Credential.Host + "api/login"
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -32,7 +29,7 @@ func OpenSession(ctx *CorvaultCtx) (err error) {
 	if err != nil {
 		return fmt.Errorf("OpenSession, http.NewRequest failed: %w", err)
 	}
-	req.Header.Add("Authorization", "Basic "+auth_string)
+	req.Header.Add("Authorization", "Basic "+ctx.Credential.Auth)
 	req.Header.Add("dataType", "json")
 	//dump, err := httputil.DumpRequestOut(req, false)
 	//fmt.Printf("%s", dump)
@@ -112,10 +109,10 @@ func (ctx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
 		return nil, fmt.Errorf("CorvaultCtx.Show disk-groups failed: %w", err)
 	}
 	dgs = new(CvtDiskGroups)
-	fmt.Println(string(buffer))
+	//fmt.Println(string(buffer))
 	err = json.Unmarshal(buffer, &dgs)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal json data: %w", err)
+		return nil, fmt.Errorf("GetDiskGroups failed to unmarshal json data: %w", err)
 	}
 	if 1 > len(dgs.DiskGroups) {
 		return nil, fmt.Errorf("No Disk Groups Present!")
@@ -128,13 +125,26 @@ func (ctx CorvaultCtx) GetDiskGroupStatistics() (data *CvtDiskGroupStatistics, e
 		return nil, fmt.Errorf("CorvaultCtx.Show disk-group-statistics failed: %w", err)
 	}
 	data = new(CvtDiskGroupStatistics)
-	fmt.Println(string(buffer))
+	//fmt.Println(string(buffer))
 	err = json.Unmarshal(buffer, &data)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal json data: %w", err)
+		return nil, fmt.Errorf("GetDiskGroupStatistics failed to unmarshal json data: %w", err)
 	}
 	if 1 > len(data.Statistics) {
 		return nil, fmt.Errorf("No Disk Group Statistics Present!")
+	}
+	return
+}
+func (ctx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
+	buffer, err := ctx.Show("system")
+	if err != nil {
+		return nil, fmt.Errorf("CorvaultCtx.Show disk-group-statistics failed: %w", err)
+	}
+	data = new(CvtSystem)
+	fmt.Println(string(buffer))
+	err = json.Unmarshal(buffer, &data)
+	if err != nil {
+		return nil, fmt.Errorf("GetSystem failed to unmarshal json data: %w", err)
 	}
 	return
 }
@@ -145,7 +155,7 @@ func main() {
 		log.Fatal(err)
 	}
 	ctx := CorvaultCtx{}
-	ctx.Credential = cfg.Targets["corvault-1a"]
+	ctx.Credential = cfg.Targets["corvault-2a"]
 
 	err = OpenSession(&ctx)
 	if err != nil {
@@ -164,10 +174,16 @@ func main() {
 	//	log.Fatal(err)
 	//}
 	//fmt.Println(diskGroups.Json())
-	diskGroupStatistics, err := ctx.GetDiskGroupStatistics()
+	//diskGroupStatistics, err := ctx.GetDiskGroupStatistics()
+	//if err != nil {
+	//	err = fmt.Errorf("GetDiskGroupStatistics Failed: %v", err.Error())
+	//	log.Fatal(err)
+	//}
+	//fmt.Println(diskGroupStatistics.Json())
+	system, err := ctx.GetSystem()
 	if err != nil {
-		err = fmt.Errorf("GetDiskGroupStatistics Failed: %v", err.Error())
+		err = fmt.Errorf("GetSystem Failed: %v", err.Error())
 		log.Fatal(err)
 	}
-	fmt.Println(diskGroupStatistics.Json())
+	fmt.Println(system.Json())
 }

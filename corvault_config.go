@@ -2,6 +2,7 @@ package main
 
 import (
 	//"errors"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"gopkg.in/yaml.v2"
@@ -14,8 +15,13 @@ var configFile string //       `yaml:"config_file"`
 type CorvaultCredential struct {
 	Host string `yaml:"host"`
 	User string `yaml:"user"`
+	Auth string `yaml:"auth"`
 	Pass string `yaml:"pass"`
 	Key  string `yaml:"key"`
+}
+
+func (c *CorvaultCredential) SetAuth(password string) {
+	c.Auth = base64.StdEncoding.EncodeToString([]byte(c.User + ":" + password))
 }
 
 type CorvaultConfig struct {
@@ -60,8 +66,8 @@ func validateConfigPath(path string) (err error) {
 func parseFlags(cfg *CorvaultConfig) error {
 	var configPath, nick, uri, user, pass string
 	flag.StringVar(&configPath, "config", "/home/johns/.cvt.config.yml", "path to config file")
-	flag.StringVar(&nick, "nickname", "corvault-1a", "Nickname of a corvault target node")
-	flag.StringVar(&uri, "uri", "https://corvault-1a/", "URI of corvault target node")
+	flag.StringVar(&nick, "nickname", "corvault-2a", "Nickname of a corvault target node")
+	flag.StringVar(&uri, "uri", "https://corvault-2a/", "URI of corvault target node")
 	flag.StringVar(&user, "user", "manage", "user account name on corvault target")
 	flag.StringVar(&pass, "pass", "Testit123!", "password of the named user account")
 
