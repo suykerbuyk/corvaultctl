@@ -9,7 +9,8 @@ import (
 	"log"
 	"net/http"
 	//"net/http/httputil"
-	//"strings"
+	"github.com/alecthomas/kong"
+	"strings"
 	//	"os"
 	"time"
 )
@@ -19,21 +20,21 @@ type CorvaultCtx struct {
 	Client     *http.Client
 }
 
-func OpenSession(ctx *CorvaultCtx) (err error) {
-	url := ctx.Credential.Host + "api/login"
+func OpenSession(tgtCtx *CorvaultCtx) (err error) {
+	url := tgtCtx.Credential.Host + "api/login"
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	ctx.Client = &http.Client{Timeout: time.Second * 5, Transport: tr}
+	tgtCtx.Client = &http.Client{Timeout: time.Second * 5, Transport: tr}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("OpenSession, http.NewRequest failed: %w", err)
 	}
-	req.Header.Add("Authorization", "Basic "+ctx.Credential.Auth)
+	req.Header.Add("Authorization", "Basic "+tgtCtx.Credential.Auth)
 	req.Header.Add("dataType", "json")
 	//dump, err := httputil.DumpRequestOut(req, false)
 	//fmt.Printf("%s", dump)
-	resp, err := ctx.Client.Do(req)
+	resp, err := tgtCtx.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("OpenSession, Client.Do failed: %w", err)
 	}
@@ -54,22 +55,22 @@ func OpenSession(ctx *CorvaultCtx) (err error) {
 	if status.Status[0].ReturnCode != 1 {
 		return fmt.Errorf("OpenSession : API return code was not \"1\" %d : ", status.Status[0].ReturnCode)
 	}
-	ctx.Credential.Key = status.Status[0].Response
-	//fmt.Printf("sessionKey=%s\n", ctx.Credential.Key)
+	tgtCtx.Credential.Key = status.Status[0].Response
+	//fmt.Printf("sessionKey=%s\n", tgtCtx.Credential.Key)
 	return
 
 }
-func (ctx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
-	url := ctx.Credential.Host + "api/show/" + aspect
+func (tgtCtx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
+	url := tgtCtx.Credential.Host + "api/show/" + aspect
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("CorvaultCtx.Show - http.NewRequest failed for %s: %w", url, err)
 	}
 	req.Header.Add("dataType", "json")
-	req.Header.Add("sessionKey", ctx.Credential.Key)
-	resp, err := ctx.Client.Do(req)
+	req.Header.Add("sessionKey", tgtCtx.Credential.Key)
+	resp, err := tgtCtx.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("CorvaultCtx.Show - ctx.Client.Do failed for %s: %w", url, err)
+		return nil, fmt.Errorf("CorvaultCtx.Show - tgtCtx.Client.Do failed for %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 	//fmt.Println("Dumping the request:")
@@ -88,8 +89,8 @@ func (ctx CorvaultCtx) Show(aspect string) (buffer []byte, err error) {
 	}
 	return
 }
-func (ctx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
-	buffer, err := ctx.Show("certificate")
+func (tgtCtx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
+	buffer, err := tgtCtx.Show("certificate")
 	if err != nil {
 		return nil, fmt.Errorf("GetCertificate - CorvaultCtx.Show certificate failed: %w", err)
 	}
@@ -103,8 +104,8 @@ func (ctx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
 	}
 	return
 }
-func (ctx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
-	buffer, err := ctx.Show("disk-groups")
+func (tgtCtx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
+	buffer, err := tgtCtx.Show("disk-groups")
 	if err != nil {
 		return nil, fmt.Errorf("CorvaultCtx.Show disk-groups failed: %w", err)
 	}
@@ -119,8 +120,8 @@ func (ctx CorvaultCtx) GetDiskGroups() (dgs *CvtDiskGroups, err error) {
 	}
 	return
 }
-func (ctx CorvaultCtx) GetDiskGroupStatistics() (data *CvtDiskGroupStatistics, err error) {
-	buffer, err := ctx.Show("disk-group-statistics")
+func (tgtCtx CorvaultCtx) GetDiskGroupStatistics() (data *CvtDiskGroupStatistics, err error) {
+	buffer, err := tgtCtx.Show("disk-group-statistics")
 	if err != nil {
 		return nil, fmt.Errorf("CorvaultCtx.Show disk-group-statistics failed: %w", err)
 	}
@@ -135,8 +136,8 @@ func (ctx CorvaultCtx) GetDiskGroupStatistics() (data *CvtDiskGroupStatistics, e
 	}
 	return
 }
-func (ctx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
-	buffer, err := ctx.Show("system")
+func (tgtCtx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
+	buffer, err := tgtCtx.Show("system")
 	if err != nil {
 		return nil, fmt.Errorf("CorvaultCtx.Show disk-group-statistics failed: %w", err)
 	}
@@ -149,38 +150,79 @@ func (ctx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
 	return
 }
 func main() {
+	cli := CLI{
+		CliGlobals: CliGlobals{
+			Version: VersionFlag("0.1.1"),
+		},
+	}
+
+	cliCtx := kong.Parse(&cli,
+		kong.Name("corvaultctl"),
+		kong.Description("Simple CLI interface into Seagate Enclosures to facilitate DevOps."),
+		kong.UsageOnError(),
+		kong.ConfigureHelp(kong.HelpOptions{
+			Compact: true,
+			//Tree:    true,
+		}),
+		kong.Vars{
+			"version": "0.0.1",
+		})
+	err := cliCtx.Run(&cli.CliGlobals)
+	fmt.Println("Command: ", cliCtx.Command())
+	fmt.Println("Command Args: ", cliCtx.Args)
+	cliCtx.FatalIfErrorf(err)
+	cmdStrings := strings.Split(cliCtx.Command(), " ")
+	switch cmdStrings[0] {
+	case "target":
+		fmt.Println("Target command found")
+	case "raw":
+		fmt.Println("Raw command found", cli.Raw.Cmd)
+	case "show":
+		switch cmdStrings[1] {
+		case "disks":
+			fmt.Println("Show Disks command found")
+		case "advanced-settings":
+			fmt.Println("Show AdvancedSettings command found")
+		case "alert-condition-history":
+			fmt.Println("Show AlertConditionHistory command found")
+		case "certificates":
+			fmt.Println("Show Certificates command found")
+		case "volumes":
+			fmt.Println("Show Volumes command found")
+		}
+	}
 	cfg, err := GetCvtConfig()
 	if err != nil {
 		err = fmt.Errorf("GetCvtConfig Failed!: %v", err.Error())
 		log.Fatal(err)
 	}
-	ctx := CorvaultCtx{}
-	ctx.Credential = cfg.Targets["corvault-2a"]
+	tgtCtx := CorvaultCtx{}
+	tgtCtx.Credential = cfg.Targets["corvault-2a"]
 
-	err = OpenSession(&ctx)
+	err = OpenSession(&tgtCtx)
 	if err != nil {
 		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
 		log.Fatal(err)
 	}
-	//certStatus, err := ctx.GetCertificate()
+	//certStatus, err := tgtCtx.GetCertificate()
 	//if err != nil {
 	//	err = fmt.Errorf("FetchCeritificate Failed!: %v", err.Error())
 	//	log.Fatal(err)
 	//}
 	//fmt.Println(certStatus.Text())
-	//diskGroups, err := ctx.GetDiskGroups()
+	//diskGroups, err := tgtCtx.GetDiskGroups()
 	//if err != nil {
 	//	err = fmt.Errorf("GetDiskGroups Failed: %v", err.Error())
 	//	log.Fatal(err)
 	//}
 	//fmt.Println(diskGroups.Json())
-	//diskGroupStatistics, err := ctx.GetDiskGroupStatistics()
+	//diskGroupStatistics, err := tgtCtx.GetDiskGroupStatistics()
 	//if err != nil {
 	//	err = fmt.Errorf("GetDiskGroupStatistics Failed: %v", err.Error())
 	//	log.Fatal(err)
 	//}
 	//fmt.Println(diskGroupStatistics.Json())
-	system, err := ctx.GetSystem()
+	system, err := tgtCtx.GetSystem()
 	if err != nil {
 		err = fmt.Errorf("GetSystem Failed: %v", err.Error())
 		log.Fatal(err)
