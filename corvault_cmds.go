@@ -40,6 +40,14 @@ func (aCmd *RegisterTargetCmd) Run(globals *CliGlobals) error {
 	fmt.Printf("Pass: %v\n", aCmd.Pass)
 	return nil
 }
+func (aCmd *RegisterTargetCmd) AsJson() (jsonStr string, err error) {
+	prettyJSON, err := json.MarshalIndent(aCmd, "", "  ")
+	if err != nil {
+		return
+	}
+	jsonStr = string(prettyJSON)
+	return
+}
 
 type CvtRawCmd struct {
 	Target []string `required help:"named enclosure target" short:"t"`
@@ -53,11 +61,21 @@ func (aCmd *CvtRawCmd) Run(globals *CliGlobals) error {
 	fmt.Println("Cmd.len:", len(aCmd.Cmd))
 	return nil
 }
+func (aCmd *CvtRawCmd) AsJson() (jsonStr string, err error) {
+	prettyJSON, err := json.MarshalIndent(aCmd, "", "  ")
+	if err != nil {
+		return
+	}
+	jsonStr = string(prettyJSON)
+	return
+}
 
 type CvtShowCmd struct {
 	Target []string `required help:"named enclosure target" short:"t"`
 	Disks  struct {
 	} `cmd help:"Generates a report of disk present in the enclosure"`
+	DiskGroups struct {
+	} `cmd help:"Generates a report of defined disk groups."`
 
 	AlertConditionHistory struct {
 	} `cmd help:"show alert condition history"`
@@ -77,10 +95,20 @@ type CvtShowCmd struct {
 	} `cmd help:"tester cmd"`
 }
 
-func (aCmd *CvtShowCmd) Run(globals *CliGlobals) error {
-	fmt.Println("Running show command")
-	fmt.Printf("Target: %s\n", aCmd.Target)
-	fmt.Printf("show cmd struct: %v\n", aCmd)
+func (aCmd *CvtShowCmd) AsJson() (jsonStr string, err error) {
+	prettyJSON, err := json.MarshalIndent(aCmd, "", "  ")
+	if err != nil {
+		return
+	}
+	jsonStr = string(prettyJSON)
+	return
+}
+
+func (aCmd *CvtShowCmd) Run(globals *CliGlobals, kCtx *kong.Context) error {
+	subCmdName := kCtx.Selected().Name
+	fmt.Printf("Sending \"show %s to %s\n", subCmdName, strings.Join(aCmd.Target, " "))
+
+	//fmt.Printf("show cmd struct: %v\n", aCmd)
 	prettyJSON, err := json.MarshalIndent(aCmd, "", "  ")
 	if err != nil {
 		log.Fatal(fmt.Errorf("ResponseStatus to JSON string error: " + err.Error()))

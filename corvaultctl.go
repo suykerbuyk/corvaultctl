@@ -152,7 +152,7 @@ func (tgtCtx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
 func main() {
 	cli := CLI{
 		CliGlobals: CliGlobals{
-			Version: VersionFlag("0.1.1"),
+			Version: VersionFlag("0.0.1"),
 		},
 	}
 
@@ -167,7 +167,7 @@ func main() {
 		kong.Vars{
 			"version": "0.0.1",
 		})
-	err := cliCtx.Run(&cli.CliGlobals)
+	err := cliCtx.Run(&cli.CliGlobals, cliCtx)
 	fmt.Println("Command: ", cliCtx.Command())
 	fmt.Println("Command Args: ", cliCtx.Args)
 	cliCtx.FatalIfErrorf(err)
