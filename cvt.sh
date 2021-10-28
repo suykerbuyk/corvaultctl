@@ -73,6 +73,11 @@ ShowSensorStatusJSON() {
 	CMD="show sensor-status"
 	DoCmd ${TGT} "${CMD}"
 }
+ShowConfigurationJSON() {
+	TGT=$1
+	CMD="show configuration"
+	DoCmd ${TGT} "${CMD}"
+}
 GetDiskByGroup() {
 	TGT=$1
 	DG=$2
@@ -116,6 +121,11 @@ GetPowerReadings() {
 	TGT=$1
 	ShowSensorStatusJSON $TGT  | jq -r '."sensors"[]? | ."sensor-name" + " " + ."value" '  | grep "Input Rail" | grep -i 'volt\|current'
 }
+GetEcliKeyData() {
+	TGT=$1
+	ShowConfigurationJSON $TGT | \
+	 jq -r '(.versions[]? | ."object-name" + "   SC_Version: " + ."sc-fw" + "   MC_Version: " +."mc-fw"),(.controllers[]? | ."durable-id" + "_internal_serial_number: " + ."internal-serial-number")'
+}
 ProvisionSystem() {
 	TGT=$1
 	RemoveAllDiskGroups $TGT
@@ -145,5 +155,7 @@ CreateEightPlus2Adapt() {
 #RemoveDiskGroup "corvault-1a" dg01
 #CreateDiskGroups "corvault-1a"
 #ProvisionSystem "corvault-1a"
+#GetPowerReadings "corvault-3b"
+GetEcliKeyData "corvault-3b"
 
-GetPowerReadings "corvault-3b"
+#cat test | jq -r '.versions[]? | ."object-name" + "   SC: " + ."sc-fw" + "   MC: " +."mc-fw" '
