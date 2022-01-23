@@ -7,13 +7,8 @@ USER='manage'
 TARGETS=("corvault-1a" "corvault-2a" "corvault-3b")
 
 BASE_CMD='set cli-parameters json; '
-#BASE_CMD='set cli-parameters wbi pager off ; '
-#REQ=""
-export RESP=""
-#JSON=""
-#STAT=""
-cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
-cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
+#cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
+#cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
 monitor_io() {
 	while [ 1 ] ; do 
 	date
@@ -24,10 +19,6 @@ monitor_io() {
 		sleep 10
 	done
 }
-# sshpass -e ssh manage@corvault-1a 'set cli-parameters json; show disk-groups' >corvault1.disk-groups.json
-# sshpass -e ssh manage@corvault-1a 'set cli-parameters json; show volumes' >corvault1.volumes.json
-# sshpass -e ssh manage@corvault-1a 'set cli-parameters json; show initiators' >corvault1.initiators.json
-# sshpass -e ssh manage@corvault-1a 'set cli-parameters json; show maps' >corvault1.maps.json
 DoSSH() {
 	sshpass -e $@
 }
@@ -37,7 +28,8 @@ DoCmd() {
 	REPLY_FILE="${TGT}.json"
 	echo "TGT: $TGT  CMD: $BASE_CMD $@" 1>&2
 	SSHSOCKET=/tmp/$TGT.ssh.socket
-	REPLY=$(DoSSH "ssh -o ControlPath=$SSHSOCKET -o ControlMaster=auto -o ControlPersist=10m -o StrictHostKeyChecking=accept-new ${USER}@${TGT} ${BASE_CMD} $@")
+	SSHOPTS="-o ControlPath=$SSHSOCKET -o ControlMaster=auto -o ControlPersist=10m -o StrictHostKeyChecking=accept-new"
+	REPLY=$(DoSSH "ssh ${SSHOPTS} ${USER}@${TGT} ${BASE_CMD} $@")
 	# Pull off the commented lines that contain the commands sent to the target
 	#printf "REPLY: %s\n" "$REPLY" 1>&2
 	REQ=$(echo "$REPLY" | egrep '^#.*' | sed -e 's/^#[ ]*//g' -e '/^$/d' | sed -e :a -e '$!N; s/\n/; /; ta')
