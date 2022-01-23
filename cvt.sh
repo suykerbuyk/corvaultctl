@@ -12,8 +12,8 @@ BASE_CMD='set cli-parameters json; '
 export RESP=""
 #JSON=""
 #STAT=""
-# cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
-# cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
+cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
+cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
 monitor_io() {
 	while [ 1 ] ; do 
 	date
@@ -37,7 +37,7 @@ DoCmd() {
 	REPLY_FILE="${TGT}.json"
 	echo "TGT: $TGT  CMD: $BASE_CMD $@" 1>&2
 	SSHSOCKET=/tmp/$TGT.ssh.socket
-	REPLY=$(DoSSH "ssh -o ControlPath=$SSHSOCKET -o ControlMaster=auto -o ControlPersist=10m ${USER}@${TGT} ${BASE_CMD} $@")
+	REPLY=$(DoSSH "ssh -o ControlPath=$SSHSOCKET -o ControlMaster=auto -o ControlPersist=10m -o StrictHostKeyChecking=accept-new ${USER}@${TGT} ${BASE_CMD} $@")
 	# Pull off the commented lines that contain the commands sent to the target
 	#printf "REPLY: %s\n" "$REPLY" 1>&2
 	REQ=$(echo "$REPLY" | egrep '^#.*' | sed -e 's/^#[ ]*//g' -e '/^$/d' | sed -e :a -e '$!N; s/\n/; /; ta')
