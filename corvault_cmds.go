@@ -4,9 +4,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/alecthomas/kong"
-	"log"
 	"strings"
+
+	"github.com/alecthomas/kong"
 )
 
 type VersionFlag string
@@ -18,15 +18,24 @@ func (v VersionFlag) BeforeApply(app *kong.Kong, vars kong.Vars) error {
 	app.Exit(0)
 	return nil
 }
+func PrettyPrintAsJson(v interface{}) (Json string, err error) {
+	JsonBuffer, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return
+	}
+	Json = string(JsonBuffer)
+	return
+}
 
 type CliGlobals struct {
-	Config   string      `help:"Location of client config files" default:"~/.cvt.config.yml" type:"path"`
+	Config   string      `help:"Location of client config files" type:"path" default:""`
 	Debug    bool        `short:"D" help:"Enable debug mode"`
 	LogLevel string      `short:"l" help:"Set the logging level (debug|info|warn|error|fatal)" default:"info"`
 	Version  VersionFlag `name:"version" help:"Print version information and quit"`
 }
 
 type RegisterTargetCmd struct {
+	Name string `required help:"Named alias of the Seagate Enclosure target."`
 	Url  string `required help:"URL of the Seagate enclosure target."`
 	User string `required help:"user name to use to authenticate with the target."`
 	Pass string `help:"password to use to authenticate with the target"`
@@ -35,6 +44,7 @@ type RegisterTargetCmd struct {
 func (aCmd *RegisterTargetCmd) Run(globals *CliGlobals) error {
 	fmt.Println("Running target command")
 	fmt.Printf("Config: %s\n", globals.Config)
+	fmt.Printf("URL : %v\n", aCmd.Name)
 	fmt.Printf("URL : %v\n", aCmd.Url)
 	fmt.Printf("User: %v\n", aCmd.User)
 	fmt.Printf("Pass: %v\n", aCmd.Pass)
@@ -106,20 +116,26 @@ func (aCmd *CvtShowCmd) AsJson() (jsonStr string, err error) {
 
 func (aCmd *CvtShowCmd) Run(globals *CliGlobals, kCtx *kong.Context) error {
 	subCmdName := kCtx.Selected().Name
-	fmt.Printf("Sending \"show %s to %s\n", subCmdName, strings.Join(aCmd.Target, " "))
-
-	//fmt.Printf("show cmd struct: %v\n", aCmd)
-	prettyJSON, err := json.MarshalIndent(aCmd, "", "  ")
-	if err != nil {
-		log.Fatal(fmt.Errorf("ResponseStatus to JSON string error: " + err.Error()))
+	fmt.Printf("Sending \"show %s to %s\n", subCmdName, strings.Join(aCmd.Target, ","))
+	//fmt.Println(aCmd.AsJson())
+	fmt.Println(PrettyPrintAsJson(aCmd))
+	switch subCmdName {
+	case "disks":
+		fmt.Println("Show Disks command found")
+	case "advanced-settings":
+		fmt.Println("Show AdvancedSettings command found")
+	case "alert-condition-history":
+		fmt.Println("Show AlertConditionHistory command found")
+	case "certificates":
+		fmt.Println("Show Certificates command found")
+	case "volumes":
+		fmt.Println("Show Volumes command found")
 	}
-	fmt.Printf("%s\n", prettyJSON)
 	return nil
 }
 
 type CLI struct {
 	CliGlobals
-
 	Register RegisterTargetCmd `cmd help:"Register an enclosure target to manage." short:"R"`
 	Show     CvtShowCmd        `cmd help:"Show commands"`
 	Raw      CvtRawCmd         `cmd help:"Send Raw command string to target enclosure"`

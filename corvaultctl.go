@@ -3,16 +3,22 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+
 	//	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
+
+	//"log"
 	"net/http"
+
 	//"net/http/httputil"
 	"github.com/alecthomas/kong"
-	"strings"
 	//	"os"
+
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type CorvaultCtx struct {
@@ -21,6 +27,7 @@ type CorvaultCtx struct {
 }
 
 func OpenSession(tgtCtx *CorvaultCtx) (err error) {
+	log.Info().Str("Host", tgtCtx.Credential.Host).Msg("Enter Open Session")
 	url := tgtCtx.Credential.Host + "api/login"
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -97,7 +104,7 @@ func (tgtCtx CorvaultCtx) GetCertificate() (certs *CvtCertificates, err error) {
 	certs = new(CvtCertificates)
 	err = json.Unmarshal(buffer, &certs)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("Can not unmarshal certs from target")
 	}
 	if 1 > len(certs.Certificate) {
 		return nil, fmt.Errorf("GetCertificate - No Certificates present!")
@@ -150,6 +157,8 @@ func (tgtCtx CorvaultCtx) GetSystem() (data *CvtSystem, err error) {
 	return
 }
 func main() {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Info().Msg("Starting up")
 	cli := CLI{
 		CliGlobals: CliGlobals{
 			Version: VersionFlag("0.0.1"),
@@ -168,41 +177,20 @@ func main() {
 			"version": "0.0.1",
 		})
 	err := cliCtx.Run(&cli.CliGlobals, cliCtx)
+
 	fmt.Println("Command: ", cliCtx.Command())
 	fmt.Println("Command Args: ", cliCtx.Args)
 	cliCtx.FatalIfErrorf(err)
-	cmdStrings := strings.Split(cliCtx.Command(), " ")
-	switch cmdStrings[0] {
-	case "target":
-		fmt.Println("Target command found")
-	case "raw":
-		fmt.Println("Raw command found", cli.Raw.Cmd)
-	case "show":
-		switch cmdStrings[1] {
-		case "disks":
-			fmt.Println("Show Disks command found")
-		case "advanced-settings":
-			fmt.Println("Show AdvancedSettings command found")
-		case "alert-condition-history":
-			fmt.Println("Show AlertConditionHistory command found")
-		case "certificates":
-			fmt.Println("Show Certificates command found")
-		case "volumes":
-			fmt.Println("Show Volumes command found")
-		}
-	}
 	cfg, err := GetCvtConfig()
 	if err != nil {
-		err = fmt.Errorf("GetCvtConfig Failed!: %v", err.Error())
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("GetCvtConfig failed")
 	}
 	tgtCtx := CorvaultCtx{}
-	tgtCtx.Credential = cfg.Targets["corvault-2a"]
+	tgtCtx.Credential = cfg.Targets["corvault-1a"]
 
 	err = OpenSession(&tgtCtx)
 	if err != nil {
-		err = fmt.Errorf("OpenSession Failed!: %v", err.Error())
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("Open Session Failed")
 	}
 	//certStatus, err := tgtCtx.GetCertificate()
 	//if err != nil {
@@ -224,8 +212,7 @@ func main() {
 	//fmt.Println(diskGroupStatistics.Json())
 	system, err := tgtCtx.GetSystem()
 	if err != nil {
-		err = fmt.Errorf("GetSystem Failed: %v", err.Error())
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("GetSystem Failed")
 	}
 	fmt.Println(system.Json())
 }
