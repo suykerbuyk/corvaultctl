@@ -3,13 +3,21 @@
 set -e
 export SSHPASS='Testit123!'
 
+
 USER='manage'
-TARGETS=("corvault-1a" "corvault-2a" "corvault-3b")
+TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
 #TARGETS=("corvault-1a")
 
+# provides a wee bit more verbosity to stderr
+DBG=0
+# prepatory command to the corvault
 BASE_CMD='set cli-parameters json; '
+
+# interesting sysfs paths for coorelating LUNs to host HBA ports and kdevs
 #cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
 #cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
+
+# kind of like atop, but for Corvault
 monitor_io() {
 	while [ 1 ] ; do 
 	date
@@ -20,27 +28,29 @@ monitor_io() {
 		sleep 10
 	done
 }
+# Dispatches commands to the Corvault in a way that's easy to capture.
 DoSSH() {
 	sshpass -e $@
 }
+# The "meat & potatoes" - dispatches commands parses the fubar returned JSON for Corvault into something useful.
 DoCmd() {
 	TGT="${1}"
 	shift
 	REPLY_FILE="${TGT}.json"
-	echo "TGT: $TGT  CMD: $BASE_CMD $@" 1>&2
+	[[ $DBG != 0 ]] && echo "TGT: $TGT  CMD: $BASE_CMD $@" 1>&2
 	SSHSOCKET=/tmp/$TGT.ssh.socket
 	SSHOPTS="-o ControlPath=$SSHSOCKET -o ControlMaster=auto -o ControlPersist=10m -o StrictHostKeyChecking=accept-new"
 	REPLY=$(DoSSH "ssh ${SSHOPTS} ${USER}@${TGT} ${BASE_CMD} $@")
 	# Pull off the commented lines that contain the commands sent to the target
-	#printf "REPLY: %s\n" "$REPLY" 1>&2
+	[[ $DBG != 0 ]] && printf "REPLY: %s\n" "$REPLY" 1>&2
 	REQ=$(echo "$REPLY" | egrep '^#.*' | sed -e 's/^#[ ]*//g' -e '/^$/d' | sed -e :a -e '$!N; s/\n/; /; ta')
-	#printf "REQ: $REQ\n" 1>&2
+	[[ $DBG != 0 ]] && printf "REQ: $REQ\n" 1>&2
 	JSON=$(printf "%s\n" "$REPLY" | awk '/#  /,0' | egrep -v '^# .*' |  sed -e :a -e '$!N;  ta')
-	#printf "JSON: %s\n" "$JSON" 1>&2
+	[[ $DBG != 0 ]] && printf "JSON: %s\n" "$JSON" 1>&2
 	RESP=$(echo ${JSON} | jq -r '.status[].response')
 	STAT=$(echo ${JSON} | jq -r '.status[]."response-type"')
-	#printf "RESP: %s\n" "$RESP" 1>&2
-	#printf "STAT: %s\n" "$STAT" 1>&2
+	[[ $DBG != 0 ]] && printf "RESP: %s\n" "$RESP" 1>&2
+	[[ $DBG != 0 ]] && printf "STAT: %s\n" "$STAT" 1>&2
 	if [ "${STAT}" != "Success" ] ; then
 		echo "${REPLY}" >"${REPLY_FILE}"
 		echo "Error: $BASE_CMD $@" 1>&2;
@@ -49,7 +59,7 @@ DoCmd() {
 		echo "See ${REPLY} for full JSON return data" 1>&2;
 		exit 1
 	fi
-	echo "Status: ${STAT}" 1>&2
+	[[ $DBG != 0 ]] && echo "Status: ${STAT}" 1>&2
 	printf "%s\n" "$JSON"
 }
 ShowSensorStatusJSON() {
@@ -60,6 +70,11 @@ ShowSensorStatusJSON() {
 ShowConfigurationJSON() {
 	TGT=$1
 	CMD="show configuration"
+	DoCmd ${TGT} "${CMD}"
+}
+ShowHostPhyStatisticsJSON() {
+	TGT=$1
+	CMD="show host-phy-statistics"
 	DoCmd ${TGT} "${CMD}"
 }
 ShowDiskGroupsJSON() {
@@ -88,8 +103,8 @@ ShowMapsJSON() {
 	DoCmd ${TGT} "${CMD}"
 }
 GetVolumes() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="volume-name,\t"
 	HDR02="virtual-disk-name,\t"
 	HDR03="size,\t"
@@ -100,11 +115,10 @@ GetVolumes() {
 	RESULT=$(ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t\t" + ."size" + ",\t" + ."serial-number" + ",\t" + ."wwn" + ",\t" + ."creation-date-time"')
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
-
 }
 GetInitiators() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="durable-id,\t"
 	HDR02="id,\t\t\t"
 	HDR03="host-id,\t\t\t\t"
@@ -114,9 +128,23 @@ GetInitiators() {
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
-GetMaps(){
-	printf "\nRUN: ${FUNCNAME[0]}\n"
+GetHostPhyStatistics() {
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]} (filtered for non-zero counters)\n"
+	HDR01="port,\t"
+	HDR02="disparities,\t"
+	HDR03="lost-dws,\t"
+	HDR04="invalid-dws,\t"
+	HDR05="reset-errs"
+	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq -r  '."sas-host-phy-statistics"[] |  select((((."disparity-errors" != "00000000") or ."lost-dwords" != "00000000") or ."invalid-dwords" != "00000000") or ."reset-error-counter" != "00000000") | .port + "-" + (.phy|tostring) + ",\t" + ."disparity-errors" +",\t" + ."lost-dwords" + ",\t" + ."invalid-dwords" + ",\t" + ."reset-error-counter"'
+)
+	printf "${HDR}\n"
+	printf "${RESULT}\n"
+}
+GetMaps(){
+	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="volume-serial,\t                        "
 	HDR02="volume-identifier,                      "
 	HDR03="volume-name,    "
@@ -130,8 +158,8 @@ GetMaps(){
 	printf "${RESULT}\n"
 }
 GetDiskGroups() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT="$1"
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="name,   "
 	HDR02="size,           "
 	HDR03="storage-type,\t"
@@ -145,16 +173,15 @@ GetDiskGroups() {
 	printf "${RESULT}\n"
 }
 GetDiskByGroup() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
 	DG=$2
-	printf "\nRUN: ${FUNCNAME[0]} $TGT $DG\n"
+	printf "\nRUN: $TGT ${FUNCNAME[0]} $DG\n"
 	ShowDisksJSON $TGT | jq -r '.drives[]?  | ."disk-group" + " " +  ."location" ' \
 		| grep $DG | awk -F ' ' '{print $2}' | tr  '\n' ','
 }
 GetAllDiskInAllGroups() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	for DG in $(ShowDiskGroupsJSON "${TGT}" | jq -r '."disk-groups"[]? | .name')
 	do
 		DISKS=$(ShowDisksJSON $TGT | jq -r '.drives[]?  | ."disk-group" + " " +  ."location" ' \
@@ -163,15 +190,15 @@ GetAllDiskInAllGroups() {
 	done
 }
 RemoveDiskGroup() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	DG=$2
 	CMD="remove disk-groups $DG"
 	DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
 }
 RemoveAllDiskGroups() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	for DG in $(GetDiskGroups $TGT)
 	do
 		RemoveDiskGroup $TGT $DG
@@ -179,8 +206,8 @@ RemoveAllDiskGroups() {
 }
 
 CreateDiskGroups() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	CMD="add disk-group"
 	CMD="${CMD} type linear level adapt stripe-width 16+2 spare-capacity 20.0TiB interleaved-volume-count 1"
 	POOL1="assigned-to a disks 0.0-11,0.24-35,0.48-59,0.72-83,0.96-100 dg01"
@@ -189,8 +216,8 @@ CreateDiskGroups() {
 	DoCmd ${TGT} ${CMD} ${POOL2} >/dev/null #don't care about the output
 }
 CreateFourLun8plus2ADAPT() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	CMD="add disk-group"
 	CMD="${CMD} type linear level adapt stripe-width 8+2 spare-capacity 10.0TiB interleaved-volume-count 1 interleaved-basename V "
 	DGS=("assigned-to a disks 0.0-11   dg01"\
@@ -210,19 +237,19 @@ CreateFourLun8plus2ADAPT() {
 
 
 GetPowerReadings() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	ShowSensorStatusJSON $TGT  | jq -r '."sensors"[]? | ."sensor-name" + " " + ."value" '  | grep "Input Rail" | grep -i 'volt\|current'
 }
 GetEcliKeyData() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	ShowConfigurationJSON $TGT | \
 	 jq -r '(.versions[]? | ."object-name" + "   SC_Version: " + ."sc-fw" + "   MC_Version: " +."mc-fw"),(.controllers[]? | ."durable-id" + "_internal_serial_number: " + ."internal-serial-number")'
 }
 ProvisionSystem() {
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	RemoveAllDiskGroups $TGT
 	CreateDiskGroups $TGT
 }
@@ -263,8 +290,7 @@ RunCmdOnAllTargets() {
 }
 
 
-for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes
-#for CMD in GetInitiators
+for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
 do
 	RunCmdOnAllTargets $CMD
 done
