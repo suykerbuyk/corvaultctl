@@ -112,7 +112,7 @@ GetVolumes() {
 	HDR05="wwn-number,\t\t\t\t"
 	HDR06="creation-date-time"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
-	RESULT=$(ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t\t" + ."size" + ",\t" + ."serial-number" + ",\t" + ."wwn" + ",\t" + ."creation-date-time"')
+	RESULT=$(ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t\t" + ."size" + ",\t" + ."serial-number" + ",\t" + (."wwn" | ascii_downcase) + ",\t" + ."creation-date-time"')
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
