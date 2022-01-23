@@ -5,6 +5,7 @@ export SSHPASS='Testit123!'
 
 USER='manage'
 TARGETS=("corvault-1a" "corvault-2a" "corvault-3b")
+#TARGETS=("corvault-1a")
 
 BASE_CMD='set cli-parameters json; '
 #cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
@@ -89,17 +90,27 @@ ShowMapsJSON() {
 GetVolumes() {
 	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
-	ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t" + ."size" + ",\t" + ."serial-number" + ",\t" + ."wwn" + ",\t" + ."creation-date-time"'
+	HDR01="volume-name,\t"
+	HDR02="virtual-disk-name,\t"
+	HDR03="size,\t"
+	HDR04="serial-number,\t\t\t\t"
+	HDR05="wwn-number,\t\t\t\t"
+	HDR06="creation-date-time"
+	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
+	RESULT=$(ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t\t" + ."size" + ",\t" + ."serial-number" + ",\t" + ."wwn" + ",\t" + ."creation-date-time"')
+	printf "${HDR}\n"
+	printf "${RESULT}\n"
+
 }
 GetInitiators() {
 	printf "\nRUN: ${FUNCNAME[0]}\n"
 	TGT=$1
-	HDR01="durable-id,\t     "
-	HDR02="id,               "
-	HDR03="host-id,          "
-	HDR04="nickname,         "
+	HDR01="durable-id,\t"
+	HDR02="id,\t\t\t"
+	HDR03="host-id,\t\t\t\t"
+	HDR04="nickname"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}"
-	RESULT=$(ShowInitiatorsJSON $TGT | jq -r '.initiator[] | select(.mapped == "Yes") | ."durable-id" + ",\t" +  .id + ",\t" + ."host-id" + ",\t" + .nickname')
+	RESULT=$(ShowInitiatorsJSON $TGT | jq -r '.initiator[] | select(.mapped == "Yes") | "\t" + ."durable-id" + ",\t" +  .id + ",\t" + ."host-id" + ",\t" + .nickname')
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -253,6 +264,7 @@ RunCmdOnAllTargets() {
 
 
 for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes
+#for CMD in GetInitiators
 do
 	RunCmdOnAllTargets $CMD
 done
