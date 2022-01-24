@@ -20,8 +20,8 @@ if [[ $(which jq 2>&1>/dev/null) ]]; then
 elif [[ $(which jo 2>&1>/dev/null) ]]; then
        echo "Please intall jo"
        exit 1
-elif [[ $(which askpass 2>&1>/dev/null) ]]; then
-       echo "Please intall askpass"
+elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
+       echo "Please intall sshpass"
        exit 1
 fi
 
