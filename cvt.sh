@@ -108,13 +108,23 @@ GetVolumes() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="volume-name,\t"
-	HDR02="virtual-disk-name,\t"
-	HDR03="size,\t"
+	HDR02="name,\t"
+	HDR03="size,\t\t"
 	HDR04="serial-number,\t\t\t\t"
 	HDR05="wwn-number,\t\t\t\t"
 	HDR06="creation-date-time"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
-	RESULT=$(ShowVolumesJSON $1 | jq -r '.volumes[] | ."volume-name" +",\t" + ."virtual-disk-name" + ",\t\t" + ."size" + ",\t" + ."serial-number" + ",\t" + (."wwn" | ascii_downcase) + ",\t" + ."creation-date-time"')
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	.volumes[]?
+	 | ."volume-name" +",\t"
+	 + ."virtual-disk-name" + ",\t"
+	 + ."size" + ",\t"
+	 + ."serial-number" + ",\t" + (."wwn" | ascii_downcase) + ",\t"
+	 + ."creation-date-time"
+EOF
+)
+	ShowVolumesJSON $TGT >volumes.json
+	RESULT=$(ShowVolumesJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -126,7 +136,15 @@ GetInitiators() {
 	HDR03="host-id,\t\t\t\t"
 	HDR04="nickname"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}"
-	RESULT=$(ShowInitiatorsJSON $TGT | jq -r '.initiator[] | select(.mapped == "Yes") | "\t" + ."durable-id" + ",\t" +  .id + ",\t" + ."host-id" + ",\t" + .nickname')
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	.initiator[] | select(.mapped == "Yes")
+	 | "\t" + ."durable-id" + ",\t"
+	 +  .id + ",\t"
+	 + ."host-id" + ",\t"
+	 + .nickname
+EOF
+)
+	RESULT=$(ShowInitiatorsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -139,8 +157,20 @@ GetHostPhyStatistics() {
 	HDR04="invalid-dws,\t"
 	HDR05="reset-errs"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
-	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq -r  '."sas-host-phy-statistics"[] |  select((((."disparity-errors" != "00000000") or ."lost-dwords" != "00000000") or ."invalid-dwords" != "00000000") or ."reset-error-counter" != "00000000") | .port + "-" + (.phy|tostring) + ",\t" + ."disparity-errors" +",\t" + ."lost-dwords" + ",\t" + ."invalid-dwords" + ",\t" + ."reset-error-counter"'
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	."sas-host-phy-statistics"[]
+	 |  select((((."disparity-errors" != "00000000")
+	 or ."lost-dwords" != "00000000")
+	 or ."invalid-dwords" != "00000000")
+	 or ."reset-error-counter" != "00000000")
+	 | .port + "-" + (.phy|tostring) + ",\t"
+	 + ."disparity-errors" +",\t"
+	 + ."lost-dwords" + ",\t"
+	 + ."invalid-dwords" + ",\t"
+	 + ."reset-error-counter"
+EOF
 )
+	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -155,7 +185,17 @@ GetMaps(){
 	HDR06="nickname,       "
 	HDR07="lun"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
-	RESULT=$(ShowMapsJSON $TGT | jq -r '."volume-view"[]? | ."volume-serial" + ",\t" + ."volume-view-mappings"[].identifier + ",\t" + ."volume-name" + ",\t" + ."volume-view-mappings"[].access + ",\t" + ."volume-view-mappings"[].ports + ",\t" + ."volume-view-mappings"[].nickname  + ",\t" + ."volume-view-mappings"[].lun' )
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	."volume-view"[]?
+	 | ."volume-serial" + ",\t"
+	 + ."volume-view-mappings"[].identifier + ",\t"
+	 + ."volume-name" + ",\t"
+	 + ."volume-view-mappings"[].access + ",\t"
+	 + ."volume-view-mappings"[].ports + ",\t"
+	 + ."volume-view-mappings"[].nickname  + ",\t" + ."volume-view-mappings"[].lun
+EOF
+)
+	RESULT=$(ShowMapsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -302,22 +342,8 @@ RunCmdOnAllTargets() {
 }
 
 
-#for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
-#do
-#	RunCmdOnAllTargets $CMD
-#done
+for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
+do
+	RunCmdOnAllTargets $CMD
+done
 
-#JQSCRIPT=$(<<-'EOF'
-#'."disk-groups"[]?
-#| .name +",\t" + .size + ",\t"
-#+ ."storage-type" + ",\t\t"
-#+ .raidtype + ",\t\t"
-#+ (."diskcount"|tostring)
-#+ ",\t\t" + .owner + ",\t"
-#+ ."serial-number"'
-#EOF
-#)
-#ShowDiskGroupsJSON corvault-1a | jq -r ${JQSCRIPT}
-#ShowDiskGroupsJSON corvault-1a | jq -r '."disk-groups"[]? | .name +",\t" + .size + ",\t" + ."storage-type" + ",\t\t" + .raidtype + ",\t\t" + (."diskcount"|tostring) + ",\t\t" + .owner + ",\t" + ."serial-number" '
-
-GetDiskGroups corvault-1a
