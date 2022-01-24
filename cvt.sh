@@ -13,6 +13,8 @@ DBG=0
 # prepatory command to the corvault
 BASE_CMD='set cli-parameters json; '
 
+FIFO_NAME=/tmp/
+
 # interesting sysfs paths for coorelating LUNs to host HBA ports and kdevs
 #cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
 #cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
@@ -168,7 +170,17 @@ GetDiskGroups() {
 	HDR06="owner,\t"
 	HDR07="serial-number"
 	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
-	RESULT=$(ShowDiskGroupsJSON "${TGT}" | jq -r '."disk-groups"[]? | .name +",\t" + .size + ",\t" + ."storage-type" + ",\t\t" + .raidtype + ",\t\t" + (."diskcount"|tostring) + ",\t\t" + .owner + ",\t" + ."serial-number" ')
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	."disk-groups"[]?
+	 | .name +",\t" + .size + ",\t"
+	 + ."storage-type" + ",\t\t"
+	 + .raidtype + ",\t\t"
+	 + (."diskcount"|tostring)
+	 + ",\t\t" + .owner + ",\t"
+	 + ."serial-number"
+EOF
+)
+	RESULT=$(ShowDiskGroupsJSON "${TGT}" | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -290,7 +302,22 @@ RunCmdOnAllTargets() {
 }
 
 
-for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
-do
-	RunCmdOnAllTargets $CMD
-done
+#for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
+#do
+#	RunCmdOnAllTargets $CMD
+#done
+
+#JQSCRIPT=$(<<-'EOF'
+#'."disk-groups"[]?
+#| .name +",\t" + .size + ",\t"
+#+ ."storage-type" + ",\t\t"
+#+ .raidtype + ",\t\t"
+#+ (."diskcount"|tostring)
+#+ ",\t\t" + .owner + ",\t"
+#+ ."serial-number"'
+#EOF
+#)
+#ShowDiskGroupsJSON corvault-1a | jq -r ${JQSCRIPT}
+#ShowDiskGroupsJSON corvault-1a | jq -r '."disk-groups"[]? | .name +",\t" + .size + ",\t" + ."storage-type" + ",\t\t" + .raidtype + ",\t\t" + (."diskcount"|tostring) + ",\t\t" + .owner + ",\t" + ."serial-number" '
+
+GetDiskGroups corvault-1a
