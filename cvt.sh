@@ -13,7 +13,17 @@ DBG=0
 # prepatory command to the corvault
 BASE_CMD='set cli-parameters json; '
 
-FIFO_NAME=/tmp/
+# Make sure we have a support utils installed.
+if [[ $(which jq 2>&1>/dev/null) ]]; then
+       echo "Please intall jq"
+       exit 1
+elif [[ $(which jo 2>&1>/dev/null) ]]; then
+       echo "Please intall jo"
+       exit 1
+elif [[ $(which askpass 2>&1>/dev/null) ]]; then
+       echo "Please intall askpass"
+       exit 1
+fi
 
 # interesting sysfs paths for coorelating LUNs to host HBA ports and kdevs
 #cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
