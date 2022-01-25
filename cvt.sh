@@ -133,7 +133,7 @@ GetVolumes() {
 	 + ."creation-date-time"
 EOF
 )
-	ShowVolumesJSON $TGT >volumes.json
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowVolumesJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
@@ -154,6 +154,7 @@ GetInitiators() {
 	 + .nickname
 EOF
 )
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowInitiatorsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
@@ -180,6 +181,7 @@ GetHostPhyStatistics() {
 	 + ."reset-error-counter"
 EOF
 )
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
@@ -205,6 +207,7 @@ GetMaps(){
 	 + ."volume-view-mappings"[].nickname  + ",\t" + ."volume-view-mappings"[].lun
 EOF
 )
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowMapsJSON $TGT | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
@@ -230,6 +233,7 @@ GetDiskGroups() {
 	 + ."serial-number"
 EOF
 )
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowDiskGroupsJSON "${TGT}" | jq -r "${JQ}")
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
