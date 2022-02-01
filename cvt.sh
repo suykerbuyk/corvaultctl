@@ -17,12 +17,12 @@ BASE_CMD='set cli-parameters json; '
 if [[ $(which jq 2>&1>/dev/null) ]]; then
        echo "Please intall jq"
        exit 1
-elif [[ $(which jo 2>&1>/dev/null) ]]; then
-       echo "Please intall jo"
-       exit 1
 elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
        echo "Please intall sshpass"
        exit 1
+#elif [[ $(which jo 2>&1>/dev/null) ]]; then
+#       echo "Please intall jo"
+#       exit 1
 fi
 
 # interesting sysfs paths for coorelating LUNs to host HBA ports and kdevs
@@ -74,6 +74,11 @@ DoCmd() {
 	[[ $DBG != 0 ]] && echo "Status: ${STAT}" 1>&2
 	printf "%s\n" "$JSON"
 }
+ShowInquiryJSON() {
+	TGT=$1
+	CMD="show inquiry"
+	DoCmd ${TGT} "${CMD}"
+}
 ShowSensorStatusJSON() {
 	TGT=$1
 	CMD="show sensor-status"
@@ -114,6 +119,40 @@ ShowMapsJSON() {
 	CMD="show maps"
 	DoCmd ${TGT} "${CMD}"
 }
+GetInquiry() {
+	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	HDR01="product-id,\t"
+	HDR02="controller,\t"
+	HDR03="serial,\t\t\t"
+	HDR04="mc-fw,\t\t"
+	HDR05="sc-fw,\t\t"
+	HDR06="mc-loader,\t"
+	HDR07="sc-loader,\t"
+	HDR08="mac-address,\t\t"
+	HDR09="ip-address"
+	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}"
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	 (
+           ."product-info"[] | ."product-id" + ",\t"
+         )
+	 + ( 
+             .inquiry[] 
+             | ."object-name" + ",\t"
+             + ."serial-number" + ",\t"
+             + ."mc-fw" + ",\t" + ."sc-fw"
+             + ",\t" + ."mc-loader" + ",\t"
+             + ."sc-loader" + ",\t\t"
+             + ."mac-address" + ",\t"
+             + ."ip-address"
+           )
+EOF
+)
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
+	RESULT=$(ShowInquiryJSON $TGT | jq -r "${JQ}")
+	printf "${HDR}\n"
+	printf "${RESULT}\n"
+}
 GetVolumes() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
@@ -143,19 +182,33 @@ GetInitiators() {
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR01="durable-id,\t"
 	HDR02="id,\t\t\t"
-	HDR03="host-id,\t\t\t\t"
-	HDR04="nickname"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}"
+	HDR03="host-id,\t\t\t  "
+	HDR04="host-key,\t\t"
+	HDR05="nickname"
+	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+# Filtered on being mapped
+# 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+# 	.initiator[] | select(.mapped == "Yes")
+# 	 | "\t" + ."durable-id" + ",\t"
+# 	 +  .id + ",\t"
+# 	 + ."host-id" + ",\t"
+# 	 + ."host-key" + ",\t\t"
+# 	 + .nickname
+# EOF
+# )
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
-	.initiator[] | select(.mapped == "Yes")
+	.initiator[]
+	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
 	 | "\t" + ."durable-id" + ",\t"
 	 +  .id + ",\t"
-	 + ."host-id" + ",\t"
+	 + ."host-id" + "\t"
+	 + ."host-key" + ",\t\t"
 	 + .nickname
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
 	RESULT=$(ShowInitiatorsJSON $TGT | jq -r "${JQ}")
+	#RESULT=$(echo $RESULT | sed 's/NOHOST,/NOHOST,       /')
 	printf "${HDR}\n"
 	printf "${RESULT}\n"
 }
@@ -356,8 +409,7 @@ RunCmdOnAllTargets() {
 }
 
 
-for CMD in GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
+for CMD in GetInquiry GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
 do
 	RunCmdOnAllTargets $CMD
 done
-
