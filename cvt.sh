@@ -119,20 +119,10 @@ ShowMapsJSON() {
 	CMD="show maps"
 	DoCmd ${TGT} "${CMD}"
 }
-GetInquiry() {
+GetInquiryNoHdr() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	HDR01="product-id,\t"
-	HDR02="controller,\t"
-	HDR03="serial,\t\t\t"
-	HDR04="mc-fw,\t\t"
-	HDR05="sc-fw,\t\t"
-	HDR06="mc-loader,\t"
-	HDR07="sc-loader,\t"
-	HDR08="mac-address,\t\t"
-	HDR09="ip-address"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}"
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	 $T + ",\t" +
 	 (
            ."product-info"[] | ."product-id" + ",\t"
          )
@@ -149,23 +139,34 @@ GetInquiry() {
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowInquiryJSON $TGT | jq -r "${JQ}")
-	printf "${HDR}\n"
+	RESULT=$(ShowInquiryJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetVolumes() {
+GetInquiry() {
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	HDR00="controller,\t"
+	HDR01="product-id,\t"
+	HDR02="controller,\t"
+	HDR03="serial,\t\t\t"
+	HDR04="mc-fw,\t\t"
+	HDR05="sc-fw,\t\t"
+	HDR06="mc-loader,\t"
+	HDR07="sc-loader,\t"
+	HDR08="mac-address,\t\t"
+	HDR09="ip-address"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetInquiryNoHdr $TGT
+	done
+}
+GetVolumesNoHdr() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	HDR01="volume-name,\t"
-	HDR02="name,\t"
-	HDR03="size,\t\t"
-	HDR04="serial-number,\t\t\t\t"
-	HDR05="wwn-number,\t\t\t\t"
-	HDR06="creation-date-time"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	.volumes[]?
-	 | ."volume-name" +",\t"
+	 | $T + ",\t"
+	 + ."volume-name" +",\t"
 	 + ."virtual-disk-name" + ",\t"
 	 + ."size" + ",\t"
 	 + ."serial-number" + ",\t" + (."wwn" | ascii_downcase) + ",\t"
@@ -173,31 +174,44 @@ GetVolumes() {
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowVolumesJSON $TGT | jq -r "${JQ}")
-	printf "${HDR}\n"
+	RESULT=$(ShowVolumesJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetInitiators() {
+GetVolumes() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	HDR01="durable-id,\t"
-	HDR02="id,\t\t\t"
-	HDR03="host-id,\t\t\t  "
-	HDR04="host-key,\t\t"
-	HDR05="nickname"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
-# Filtered on being mapped
-# 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
-# 	.initiator[] | select(.mapped == "Yes")
-# 	 | "\t" + ."durable-id" + ",\t"
-# 	 +  .id + ",\t"
-# 	 + ."host-id" + ",\t"
-# 	 + ."host-key" + ",\t\t"
-# 	 + .nickname
-# EOF
-# )
+	HDR00="controller,\t"
+	HDR01="volume-name,\t"
+	HDR02="name,\t"
+	HDR03="size,\t\t"
+	HDR04="serial-number,\t\t\t\t"
+	HDR05="wwn-number,\t\t\t\t"
+	HDR06="creation-date-time"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetVolumesNoHdr $TGT
+	done
+}
+GetInitiatorsNoHdr() {
+	TGT=$1
+	FILTERED=$2
+	if [[ $FILTERED == 0 ]]; then
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	.initiator[]
+ 	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
+	 | $T + ",\t"
+	 + ."durable-id" + ",\t"
+	 +  .id + ",\t"
+	 + ."host-id" + "\t"
+	 + ."host-key" + ",\t\t"
+	 + .nickname
+EOF
+)
+	else
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	.initiator[] | select(.mapped == "Yes") 
 	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
 	 | "\t" + ."durable-id" + ",\t"
 	 +  .id + ",\t"
@@ -206,53 +220,93 @@ GetInitiators() {
 	 + .nickname
 EOF
 )
+	fi
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowInitiatorsJSON $TGT | jq -r "${JQ}")
-	#RESULT=$(echo $RESULT | sed 's/NOHOST,/NOHOST,       /')
-	printf "${HDR}\n"
+	RESULT=$(ShowInitiatorsJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetHostPhyStatistics() {
+GetInitiators() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]} (filtered for non-zero counters)\n"
-	HDR01="port,\t"
-	HDR02="disparities,\t"
-	HDR03="lost-dws,\t"
-	HDR04="invalid-dws,\t"
-	HDR05="reset-errs"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+	FILTERED=0
+	if [[ $FILTERED == 0 ]]; then
+		printf "\nRUN: $TGT ${FUNCNAME[0]} (unfiltered)\n"
+	else
+		printf "\nRUN: $TGT ${FUNCNAME[0]} (filtered for only mapped initiators)\n"
+	fi
+	HDR00="controller,\t"
+	HDR01="durable-id,\t"
+	HDR02="id,\t\t"
+	HDR03="host-id,\t\t\t  "
+	HDR04="host-key,\t\t"
+	HDR05="nickname"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetInitiatorsNoHdr $TGT $FILTERED
+	done
+}
+GetHostPhyStatisticsNoHdr() {
+	TGT=$1
+	FILTERED=$2
+	if [[ $FILTERED == 0 ]]; then
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	."sas-host-phy-statistics"[]
-	 |  select((((."disparity-errors" != "00000000")
-	 or ."lost-dwords" != "00000000")
-	 or ."invalid-dwords" != "00000000")
-	 or ."reset-error-counter" != "00000000")
-	 | .port + "-" + (.phy|tostring) + ",\t"
+	 | $T + ",\t"
+	 + .port + "-" + (.phy|tostring) + ",\t"
 	 + ."disparity-errors" +",\t"
 	 + ."lost-dwords" + ",\t"
 	 + ."invalid-dwords" + ",\t"
 	 + ."reset-error-counter"
 EOF
 )
+	else
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	."sas-host-phy-statistics"[]
+	 |  select((((."disparity-errors" != "00000000")
+	 or ."lost-dwords" != "00000000")
+	 or ."invalid-dwords" != "00000000")
+	 or ."reset-error-counter" != "00000000")
+	 | $T + ",\t"
+	 + .port + "-" + (.phy|tostring) + ",\t"
+	 + ."disparity-errors" +",\t"
+	 + ."lost-dwords" + ",\t"
+	 + ."invalid-dwords" + ",\t"
+	 + ."reset-error-counter"
+EOF
+)
+	fi
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq -r "${JQ}")
-	printf "${HDR}\n"
+	RESULT=$(ShowHostPhyStatisticsJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetMaps(){
+GetHostPhyStatistics() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	HDR01="volume-serial,\t                        "
-	HDR02="volume-identifier,                      "
-	HDR03="volume-name,    "
-	HDR04="access,         "
-	HDR05="ports,          "
-	HDR06="nickname,       "
-	HDR07="lun"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
+	FILTERED=0
+	if [[ $FILTERED == 0 ]]; then
+		printf "\nRUN: ${FUNCNAME[0]} (unfiltered)\n"
+	else
+		printf "\nRUN: ${FUNCNAME[0]} (filtered for non-zero counters)\n"
+	fi
+	HDR00="controller,\t"
+	HDR01="port,\t"
+	HDR02="disparities,\t"
+	HDR03="lost-dws,\t"
+	HDR04="invalid-dws,\t"
+	HDR05="reset-errs"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetHostPhyStatisticsNoHdr "$TGT" $FILTERED
+	done
+}
+GetMapsNoHdr(){
+	TGT=$1
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	."volume-view"[]?
-	 | ."volume-serial" + ",\t"
+	 | $T + ",\t"
+	 + ."volume-serial" + ",\t"
 	 + ."volume-view-mappings"[].identifier + ",\t"
 	 + ."volume-name" + ",\t"
 	 + ."volume-view-mappings"[].access + ",\t"
@@ -261,24 +315,72 @@ GetMaps(){
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowMapsJSON $TGT | jq -r "${JQ}")
-	printf "${HDR}\n"
+	RESULT=$(ShowMapsJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetDiskGroups() {
+GetMaps(){
+	TGT=$1
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	HDR00="controller,\t"
+	HDR01="volume-serial,\t                        "
+	HDR02="volume-identifier,                      "
+	HDR03="volume-name,    "
+	HDR04="access,         "
+	HDR05="ports,          "
+	HDR06="nickname,       "
+	HDR07="lun"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetMapsNoHdr "$TGT"
+	done
+}
+GetDisksNoHdr() {
 	TGT="$1"
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	HDR01="name,   "
-	HDR02="size,           "
-	HDR03="storage-type,\t"
-	HDR04="raid-type,\t"
-	HDR05="disk-count,\t"
-	HDR06="owner,\t"
-	HDR07="serial-number"
-	HDR="${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	.drives[]? 
+	 | $T + ",\t"
+	 + ."durable-id" + ",\t" 
+	 + ."disk-group" + ",\t"
+	 + ."vendor" + ",\t"
+	 + ."model" + ",\t"
+	 + ."serial-number" + ",\t"
+	 + (."blocksize"|tostring) + ",\t"
+	 + ."size" + ",\t"
+	 + ."temperature" + ",\t"
+	 + ."health"
+EOF
+)
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
+	RESULT=$(ShowDisksJSON "${TGT}" | jq --arg T "$TGT" -r "${JQ}")
+	printf "${RESULT}\n"
+}
+GetDisks() {
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	HDR00="controller,\t"
+	HDR01="name,\t\t"
+	HDR02="dgroup,\t"
+	HDR03="vendor,\t\t"
+	HDR04="model,\t\t"
+	HDR05="serial,\t\t"
+	HDR06="    blocksize,\t"
+	HDR07="size,\t"
+	HDR08="temperature,\t"
+	HDR09="health"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetDisksNoHdr "$TGT"
+	done
+}
+GetDiskGroupsNoHdr() {
+	TGT="$1"
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	."disk-groups"[]?
-	 | .name +",\t" + .size + ",\t"
+	 | $T + ",\t"
+	 + .name +",\t" + .size + ",\t"
 	 + ."storage-type" + ",\t\t"
 	 + .raidtype + ",\t\t"
 	 + (."diskcount"|tostring)
@@ -287,26 +389,42 @@ GetDiskGroups() {
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowDiskGroupsJSON "${TGT}" | jq -r "${JQ}")
-	printf "${HDR}\n"
+	RESULT=$(ShowDiskGroupsJSON "${TGT}" | jq --arg T "$TGT" -r "${JQ}")
 	printf "${RESULT}\n"
 }
-GetDiskByGroup() {
-	TGT=$1
-	DG=$2
-	printf "\nRUN: $TGT ${FUNCNAME[0]} $DG\n"
-	ShowDisksJSON $TGT | jq -r '.drives[]?  | ."disk-group" + " " +  ."location" ' \
-		| grep $DG | awk -F ' ' '{print $2}' | tr  '\n' ','
-}
-GetAllDiskInAllGroups() {
-	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	for DG in $(ShowDiskGroupsJSON "${TGT}" | jq -r '."disk-groups"[]? | .name')
+GetDiskGroups() {
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	HDR00="controller,\t"
+	HDR01="name,   "
+	HDR02="size,           "
+	HDR03="storage-type,\t"
+	HDR04="raid-type,\t"
+	HDR05="disk-count,\t"
+	HDR06="owner,\t"
+	HDR07="serial-number"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
 	do
-		DISKS=$(ShowDisksJSON $TGT | jq -r '.drives[]?  | ."disk-group" + " " +  ."location" ' \
-			| grep $DG | awk -F ' ' '{print $2}' | tr '\n' ',' | sed 's/,$//g')
-		echo "$TGT $DG: $DISKS"
+		GetDiskGroupsNoHdr "$TGT"
 	done
+}
+GetDisksInDiskGroups() {
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	HDR="controller,\tdisk-group,\tdisks"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		SHOWDISK=$(ShowDisksJSON $TGT)
+		for DG in $(echo $SHOWDISK | jq -r '.drives[]? | ."disk-group"' | sort -u)
+		do
+			printf "$TGT,\t$DG\t"
+			printf "$SHOWDISK\n"  \
+			| jq -r '.drives[]? | ."disk-group" + " " + ."location" ' \
+			| grep $DG | awk -F ' ' '{print $2}' | tr '\n' ',' | sed 's/,$//g' ; printf "\n"
+		done
+	done
+	
 }
 RemoveDiskGroup() {
 	TGT=$1
@@ -357,8 +475,19 @@ CreateFourLun8plus2ADAPT() {
 
 GetPowerReadings() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	ShowSensorStatusJSON $TGT  | jq -r '."sensors"[]? | ."sensor-name" + " " + ."value" '  | grep "Input Rail" | grep -i 'volt\|current'
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	printf "controller,\tL1_VOLT,\tL1_AMP,\tL1_WATT,\tL2_VOLT,\tL2_AMP,\tL2_WATT,\tTotalWatts\n"
+	for TGT in ${TARGETS[*]}; do
+		RESULT=$(ShowSensorStatusJSON $TGT)
+		LVOLT1=$(echo ${RESULT} | jq -r '.sensors[]? | select(."durable-id" == "sensor_volt_psu_0.0.1").value')
+		LVOLT2=$(echo ${RESULT} | jq -r '.sensors[]? | select(."durable-id" == "sensor_volt_psu_0.1.1").value')
+		LCURR1=$(echo ${RESULT} | jq -r '.sensors[]? | select(."durable-id" == "sensor_curr_psu_0.0.1").value')
+		LCURR2=$(echo ${RESULT} | jq -r '.sensors[]? | select(."durable-id" == "sensor_curr_psu_0.1.1").value')
+		LWATT1=$(echo "scale=2; $LVOLT1 * $LCURR1" | bc -l)
+		LWATT2=$(echo "scale=2; $LVOLT2 * $LCURR2" | bc -l)
+		LWATT_TOTAL=$(echo "scale=2; $LWATT1 + $LWATT2" | bc -l)
+		printf "$TGT,\t$LVOLT1,\t\t$LCURR1,\t$LWATT1,\t\t$LVOLT2,\t\t$LCURR2,\t$LWATT2,\t\t$LWATT_TOTAL\n"
+	done
 }
 GetEcliKeyData() {
 	TGT=$1
@@ -409,7 +538,7 @@ RunCmdOnAllTargets() {
 }
 
 
-for CMD in GetInquiry GetDiskGroups GetPowerReadings GetAllDiskInAllGroups GetMaps GetInitiators GetVolumes GetHostPhyStatistics
+for CMD in GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
 do
-	RunCmdOnAllTargets $CMD
+	$CMD
 done
