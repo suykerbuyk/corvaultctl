@@ -25,9 +25,42 @@ elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
 #       exit 1
 fi
 
+# set initiator id 500062b206989400 nickname SAS9305-16e-SPA2500634-p0
+# set initiator id 500062b206989401 nickname SAS9305-16e-SPA2500634-p1
+# set initiator id 500062b206989408 nickname SAS9305-16e-SPA2500634-p2
+# set initiator id 500062b206989649 nickname SAS9305-16e-SPA2500494-p3
+# set initiator id 500062b206989640 nickname SAS9305-16e-SPA2500494-p0
+# set initiator id 500062b206989641 nickname SAS9305-16e-SPA2500494-p1
+# set initiator id 500062b206989648 nickname SAS9305-16e-SPA2500494-p2
+# set initiator id 500062b206989409 nickname SAS9305-16e-SPA2500634-p3
+# set initiator id 500605b00de2aa80 nickname HBA_9405W-16e-SPA2500494-p0
+# set initiator id 500605b00de2aa81 nickname HBA_9405W-16e-SPA2500494-p1
+# set initiator id 500605b00de2aa88 nickname HBA_9405W-16e-SPA2500494-p2
+# set initiator id 500605b00de2aa89 nickname HBA_9405W-16e-SPA2500494-p3
+# set initiator id 500605b00de2b640 nickname HBA_9405W-16e-SP82331324-p0
+# set initiator id 500605b00de2b641 nickname HBA_9405W-16e-SP82331324-p1
+# set initiator id 500605b00de2b648 nickname HBA_9405W-16e-SP82331324-p2
+# set initiator id 500605b00de2b649 nickname HBA_9405W-16e-SP82331324-p3
+# corvault-1 map volume Volume_0000 initiator SAS9305-16e-SPA2500494-p1 lun 2
+# corvault-1 map volume Volume_0001 initiator SAS9305-16e-SPA2500634-p1 lun 2
+# corvault-2 map volume VOL0000 initiator SAS9305-16e-SPA2500494-p0 lun 2
+# corvault-2 map volume VOL0001 initiator SAS9305-16e-SPA2500634-p0 lun 2
+# corvault-3 map volume VOL0000 initiator SAS9305-16e-SPA2500494-p2 lun 2
+# corvault-3 map volume VOL0001 initiator SAS9305-16e-SPA2500634-p2 lun 2
+
 # interesting sysfs paths for coorelating LUNs to host HBA ports and kdevs
 #cat /sys/devices/*/*/*/host*/phy-*/sas_phy/*/sas_address | sort -u | cut -c 15-
 #cat /sys/devices/pci*/*/*/host*/port*/end_device*/target*/*/sas_address | sort -u
+
+# cat stor.show.all.json | jq -r '."Controllers"[]? | ."Response Data"."IT System Overview"[] | (.Ctl |tostring) + ",\t" + .Model + ",\t" + ."AdapterType"  + ",\t" + ."PCI Address" + ",\t" '
+#  0,      HBA 9405W-16e,    SAS3616(B0),  00:19:00:00,
+#  1,      HBA 9405W-16e,    SAS3616(B0),  00:b0:00:00,
+#  2,      SAS9305-16e,      SAS3216(A1),  00:86:00:00,
+#  3,      SAS9305-16e,      SAS3216(A1),  00:af:00:00,
+# cat store.show.c0.all.json | jq -r '."Controllers"[]? | ."Response Data"."Basics"| ."SAS Address" + ",\t" + ."PCI Address"'
+#  500605b00de2aa80,      00:19:00:00
+
+
 
 # kind of like atop, but for Corvault
 monitor_io() {
@@ -203,6 +236,7 @@ GetInitiatorsNoHdr() {
  	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
 	 | $T + ",\t"
 	 + ."durable-id" + ",\t"
+	 +  .discovered + ",\t"
 	 +  .id + ",\t"
 	 + ."host-id" + "\t"
 	 + ."host-key" + ",\t\t"
@@ -211,9 +245,11 @@ EOF
 )
 	else
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
-	.initiator[] | select(.mapped == "Yes") 
+	.initiator[] | select(.discovered == "Yes") 
 	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
-	 | "\t" + ."durable-id" + ",\t"
+	 | $T + ",\t"
+	 +  ."durable-id" + ",\t"
+	 +  .discovered + ",\t"
 	 +  .id + ",\t"
 	 + ."host-id" + "\t"
 	 + ."host-key" + ",\t\t"
@@ -227,19 +263,20 @@ EOF
 }
 GetInitiators() {
 	TGT=$1
-	FILTERED=0
+	FILTERED=1
 	if [[ $FILTERED == 0 ]]; then
 		printf "\nRUN: $TGT ${FUNCNAME[0]} (unfiltered)\n"
 	else
-		printf "\nRUN: $TGT ${FUNCNAME[0]} (filtered for only mapped initiators)\n"
+		printf "\nRUN: $TGT ${FUNCNAME[0]} (filtered for only discovered initiators)\n"
 	fi
 	HDR00="controller,\t"
-	HDR01="durable-id,\t"
-	HDR02="id,\t\t"
-	HDR03="host-id,\t\t\t  "
-	HDR04="host-key,\t\t"
-	HDR05="nickname"
-	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}"
+	HDR01="d-id,\t"
+	HDR02="dscvrd,\t"
+	HDR03="id,\t\t"
+	HDR04="host-id,\t\t\t  "
+	HDR05="host-key,\t\t"
+	HDR06="nickname"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR05}"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
 	do
@@ -529,16 +566,39 @@ Provision8plus24lun() {
 	done
 	wait
 }
-
-RunCmdOnAllTargets() {
-	for TGT in "${TARGETS[@]}"
+GetHostSasInfo(){
+	STORCLI=$(which storcli 2>/dev/null) || true
+	if [[ "X${STORCLI}" == "X" ]] ; then
+		STORCLI=$(which storcli64 2>/dev/null) || true
+	fi		
+	if [[ "X${STORCLI}" == "X" ]] ; then
+		echo "please install storcli from Broadcom's website"
+		echo "https://docs.broadcom.com/site-search?q=storcli"
+		exit
+	fi		
+	LSI_CTRLRS="$($STORCLI  show all J  | jq -j -c -r '."Controllers"[]? | ."Response Data"."IT System Overview"[]')"
+	HDR="Controller,  Controller Model,       Adapter,   PCI Address,          SAS Address,   Serial Number,     FirmwareVer,    Driver, DriverVer"
+	printf "${HDR}\n"
+	echo -n $LSI_CTRLRS | sed 's:}:}\n:g' | while read -r line
 	do
-		$1 $TGT
+		CTRL=$(echo $line | jq -r '.Ctl |tostring')
+		MODEL=$(echo $line | jq -r '.Model')
+		ADAPT=$(echo $line | jq -r '.AdapterType')
+		PCIADR=$(echo $line | jq -r '."PCI Address"')
+		INITIATOR_BASICS="$($STORCLI /c${CTRL} show all J | jq -r -c '.Controllers[]."Response Data"."Basics"')"
+		INITIATOR_VERSION="$($STORCLI /c${CTRL} show all J | jq -r -c '.Controllers[]."Response Data"."Version"')"
+		SASADR=$(echo $INITIATOR_BASICS | jq -r '."SAS Address"')
+		MODEL2=$(echo $INITIATOR_BASICS | jq -r '."Model"')
+		SERIAL=$(echo $INITIATOR_BASICS | jq -r '."Serial Number"')
+		FIRMWARE=$(echo $INITIATOR_VERSION | jq -r '."Firmware Version"')
+		DRIVER=$(echo $INITIATOR_VERSION | jq -r '."Driver Name"')
+		DRIVERVER=$(echo $INITIATOR_VERSION | jq -r '."Driver Version"')
+		printf "\t$CTRL,\t$MODEL,\t$ADAPT,\t$PCIADR,\t$SASADR,\t$SERIAL,\t$FIRMWARE,\t$DRIVER, $DRIVERVER\n"
 	done
 }
 
-
-for CMD in GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
+for CMD in GetHostSasInfo GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
+#for CMD in GetHostSasInfo GetInitiators
 do
 	$CMD
 done
