@@ -20,11 +20,10 @@ if [[ $(which jq 2>&1>/dev/null) ]]; then
 elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
        echo "Please intall sshpass"
        exit 1
-#elif [[ $(which jo 2>&1>/dev/null) ]]; then
-#       echo "Please intall jo"
-#       exit 1
 fi
 
+# An example of using the output of this utility to configure and map 
+# Initiators to volumes:
 # set initiator id 500062b206989400 nickname SAS9305-16e-SPA2500634-p0
 # set initiator id 500062b206989401 nickname SAS9305-16e-SPA2500634-p1
 # set initiator id 500062b206989408 nickname SAS9305-16e-SPA2500634-p2
@@ -152,6 +151,80 @@ ShowMapsJSON() {
 	CMD="show maps"
 	DoCmd ${TGT} "${CMD}"
 }
+ShowMpt3SasHBAsJSON() {
+	PREFIX="  {\n"
+	printf "{\n\"mpt3hba\":[\n"
+	for X in $(find /sys/class/scsi_host/host*/ | grep host_sas_address)
+	do
+		CTRLR_PATH=$(dirname $(realpath $X))
+		PCI_ADDR=$(printf "$CTRLR_PATH" | awk -F '/' '{print $6}')
+		PCI_HOST_PATH="$(dirname $(dirname $(dirname $CTRLR_PATH)))"
+		PCI_VENDOR="$(cat $PCI_HOST_PATH/vendor)"
+		PCI_SUBSYSTEM_VENDOR="$(cat $PCI_HOST_PATH/subsystem_vendor)"
+		PCI_SUBSYSTEM_DEVICE="$(cat $PCI_HOST_PATH/subsystem_device)"
+		UNIQUE_ID="$(cat $CTRLR_PATH/unique_id)"
+		SAS_ADDR="$(cat $CTRLR_PATH/host_sas_address)"
+		BOARD_NAME="$(cat $CTRLR_PATH/board_name)"
+		BOARD_ASSEMBLY="$(cat $CTRLR_PATH/board_assembly)"
+		VERSION_BIOS="$(cat $CTRLR_PATH/version_bios)"
+		VERSION_FW="$(cat $CTRLR_PATH/version_fw)"
+		VERSION_MPI="$(cat $CTRLR_PATH/version_mpi)"
+		VERSION_NVDATA="$(cat $CTRLR_PATH/version_nvdata_persistent)"
+		VERSION_PRODUCT="$(cat $CTRLR_PATH/version_product)"
+		printf $PREFIX
+		printf "  \"sysfs-path\": \"$CTRLR_PATH\",\n"
+		printf "  \"unique-id\": \"$UNIQUE_ID\",\n"
+		printf "  \"pci-vendor\": \"$PCI_VENDOR\",\n"
+		printf "  \"pci-subsystem-vendor\": \"$PCI_SUBSYSTEM_VENDOR\",\n"
+		printf "  \"pci-subsystem-device\": \"$PCI_SUBSYSTEM_DEVICE\",\n"
+		printf "  \"board-name\": \"$BOARD_NAME\",\n"
+		printf "  \"board-assembly\": \"$BOARD_ASSEMBLY\",\n"
+		printf "  \"sas-address\": \"$SAS_ADDR\",\n"
+		printf "  \"pci-address\": \"$PCI_ADDR\",\n"
+		printf "  \"version-fw\": \"$VERSION_FW\",\n"
+		printf "  \"version-bios\": \"$VERSION_BIOS\",\n"
+		printf "  \"version-mpi\": \"$VERSION_MPI\",\n"
+		printf "  \"version-nvdata\": \"$VERSION_NVDATA\",\n"
+		printf "  \"version-product\": \"$VERSION_PRODUCT\"\n"
+		PREFIX="  },\n{\n"
+	done
+	printf "  }\n"
+	printf "]}\n"
+}
+ShowMpt3SasHBAs() {
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	   .mpt3hba[]? | "\t"
+           + ."unique-id" + ",\t"
+           + ."board-name" + ",\t"
+           + ."version-product" + ",\t"
+           + ."sas-address" + ",\t"
+           + ."pci-address" + ",\t"
+           + ."pci-vendor" + ",\t"
+           + ."pci-subsystem-device" + ",\t"
+           + ."version-fw"  + ",\t"
+           + ."version-bios"  + ",\t"
+           + ."version-mpi"  + ",\t"
+           + ."version-nvdata"
+EOF
+)
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
+	HDR01=" UniqueID,"
+	HDR02="          BoardName,"
+	HDR03="  ChipSet,"
+	HDR04="               SAS_Address,"
+	HDR05="      PCI_Address,"
+	HDR06="   Vendor,"
+	HDR07=" Device,"
+	HDR08=" FirmwareVer,"
+	HDR09="        BiosVer,"
+	HDR10="    MpiVer,"
+	HDR11=" NvDataVer"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}${HDR10}${HDR11}"
+	printf "$HDR\n"
+	RESULT=$(ShowMpt3SasHBAsJSON | jq  -r "${JQ}")
+	printf "${RESULT}\n"
+}
 GetInquiryNoHdr() {
 	TGT=$1
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
@@ -271,7 +344,7 @@ GetInitiators() {
 	fi
 	HDR00="controller,\t"
 	HDR01="d-id,\t"
-	HDR02="dscvrd,\t"
+	HDR02="dscvrd,\t\t"
 	HDR03="id,\t\t"
 	HDR04="host-id,\t\t\t  "
 	HDR05="host-key,\t\t"
@@ -566,39 +639,7 @@ Provision8plus24lun() {
 	done
 	wait
 }
-GetHostSasInfo(){
-	STORCLI=$(which storcli 2>/dev/null) || true
-	if [[ "X${STORCLI}" == "X" ]] ; then
-		STORCLI=$(which storcli64 2>/dev/null) || true
-	fi		
-	if [[ "X${STORCLI}" == "X" ]] ; then
-		echo "please install storcli from Broadcom's website"
-		echo "https://docs.broadcom.com/site-search?q=storcli"
-		exit
-	fi		
-	LSI_CTRLRS="$($STORCLI  show all J  | jq -j -c -r '."Controllers"[]? | ."Response Data"."IT System Overview"[]')"
-	HDR="Controller,  Controller Model,       Adapter,   PCI Address,          SAS Address,   Serial Number,     FirmwareVer,    Driver, DriverVer"
-	printf "${HDR}\n"
-	echo -n $LSI_CTRLRS | sed 's:}:}\n:g' | while read -r line
-	do
-		CTRL=$(echo $line | jq -r '.Ctl |tostring')
-		MODEL=$(echo $line | jq -r '.Model')
-		ADAPT=$(echo $line | jq -r '.AdapterType')
-		PCIADR=$(echo $line | jq -r '."PCI Address"')
-		INITIATOR_BASICS="$($STORCLI /c${CTRL} show all J | jq -r -c '.Controllers[]."Response Data"."Basics"')"
-		INITIATOR_VERSION="$($STORCLI /c${CTRL} show all J | jq -r -c '.Controllers[]."Response Data"."Version"')"
-		SASADR=$(echo $INITIATOR_BASICS | jq -r '."SAS Address"')
-		MODEL2=$(echo $INITIATOR_BASICS | jq -r '."Model"')
-		SERIAL=$(echo $INITIATOR_BASICS | jq -r '."Serial Number"')
-		FIRMWARE=$(echo $INITIATOR_VERSION | jq -r '."Firmware Version"')
-		DRIVER=$(echo $INITIATOR_VERSION | jq -r '."Driver Name"')
-		DRIVERVER=$(echo $INITIATOR_VERSION | jq -r '."Driver Version"')
-		printf "\t$CTRL,\t$MODEL,\t$ADAPT,\t$PCIADR,\t$SASADR,\t$SERIAL,\t$FIRMWARE,\t$DRIVER, $DRIVERVER\n"
-	done
-}
-
-for CMD in GetHostSasInfo GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
-#for CMD in GetHostSasInfo GetInitiators
+for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
 do
 	$CMD
 done

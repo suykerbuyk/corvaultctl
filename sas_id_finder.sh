@@ -31,6 +31,7 @@ GetMpt3SasHBAs() {
 		printf "   MPI VERSION: $VERSION_MPI\n"
 		printf "   NVDATA VERSION: $VERSION_NVDATA\n"
 		printf "   PRODUCT VERSION: $VERSION_PRODUCT\n"
+		printf "  \"version-product\": \"$VERSION_PRODUCT\"\n"
 	done
 }
 GetMpt3SasHBAsJSON() {
@@ -66,7 +67,8 @@ GetMpt3SasHBAsJSON() {
 		printf "  \"version-fw\": \"$VERSION_FW\",\n"
 		printf "  \"version-bios\": \"$VERSION_BIOS\",\n"
 		printf "  \"version-mpi\": \"$VERSION_MPI\",\n"
-		printf "  \"version-nvdata\": \"$VERSION_NVDATA\"\n"
+		printf "  \"version-nvdata\": \"$VERSION_NVDATA\",\n"
+		printf "  \"version-product\": \"$VERSION_PRODUCT\"\n"
 		PREFIX="  },\n{\n"
 	done
 	printf "  }\n"
