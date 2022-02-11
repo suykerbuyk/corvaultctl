@@ -272,6 +272,7 @@ GetVolumesNoHdr() {
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	.volumes[]?
 	 | $T + ",\t"
+	 + ."owner" + ",\t"
 	 + ."volume-name" +",\t"
 	 + ."virtual-disk-name" + ",\t"
 	 + ."size" + ",\t"
@@ -287,13 +288,14 @@ GetVolumes() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HDR00="controller,\t"
-	HDR01="volume-name,\t"
-	HDR02="name,\t"
-	HDR03="size,\t\t"
-	HDR04="serial-number,\t\t\t\t"
-	HDR05="wwn-number,\t\t\t\t"
-	HDR06="creation-date-time"
-	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
+	HDR01="owner,\t"
+	HDR02="volume-name,\t"
+	HDR03="name,\t"
+	HDR04="size,\t\t"
+	HDR05="serial-number,\t\t\t\t"
+	HDR06="wwn-number,\t\t\t\t"
+	HDR07="creation-date-time"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
 	do
@@ -306,26 +308,25 @@ GetInitiatorsNoHdr() {
 	if [[ $FILTERED == 0 ]]; then
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	.initiator[]
- 	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
 	 | $T + ",\t"
 	 + ."durable-id" + ",\t"
-	 +  .discovered + ",\t"
-	 +  .id + ",\t"
-	 + ."host-id" + "\t"
-	 + ."host-key" + ",\t\t"
+	 + .discovered + ",\t"
+	 + .id + ",\t"
+	 + (."host-port-bits-a"| tostring) + ",\t"
+	 + (."host-port-bits-b"| tostring) + ",\t"
 	 + .nickname
 EOF
 )
 	else
+	 #| if ."host-id" == "NOHOST" then ."host-id"="NOHOST " else ."host-id" = ."host-id" + "," end
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
 	.initiator[] | select(.discovered == "Yes") 
-	 | if ."host-id" == "NOHOST" then ."host-id"="NOHOST,                          " else ."host-id" = ."host-id" + "," end
 	 | $T + ",\t"
-	 +  ."durable-id" + ",\t"
-	 +  .discovered + ",\t"
-	 +  .id + ",\t"
-	 + ."host-id" + "\t"
-	 + ."host-key" + ",\t\t"
+	 + ."durable-id" + ",\t"
+	 + .discovered + ",\t"
+	 + .id + ",\t"
+	 + (."host-port-bits-a"| tostring) + ",\t"
+	 + (."host-port-bits-b"| tostring) + ",\t"
 	 + .nickname
 EOF
 )
@@ -345,11 +346,11 @@ GetInitiators() {
 	HDR00="controller,\t"
 	HDR01="d-id,\t"
 	HDR02="dscvrd,\t\t"
-	HDR03="id,\t\t"
-	HDR04="host-id,\t\t\t  "
-	HDR05="host-key,\t\t"
+	HDR03="id,\t"
+	HDR04="HostBitsA, "
+	HDR05="HostBitsB,\t"
 	HDR06="nickname"
-	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR05}"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
 	do
