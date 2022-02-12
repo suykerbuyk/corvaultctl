@@ -126,6 +126,11 @@ ShowHostPhyStatisticsJSON() {
 	CMD="show host-phy-statistics"
 	DoCmd ${TGT} "${CMD}"
 }
+ShowExpanderStatusStatsJSON() {
+	TGT=$1
+	CMD="show expander-status stats"
+	DoCmd ${TGT} "${CMD}"
+}
 ShowDiskGroupsJSON() {
 	TGT="$1"
 	CMD="show disk-groups"
@@ -152,10 +157,12 @@ ShowMapsJSON() {
 	DoCmd ${TGT} "${CMD}"
 }
 ShowMpt3SasHBAsJSON() {
+	ENTRY_COUNT=0
 	PREFIX="  {\n"
 	printf "{\n\"mpt3hba\":[\n"
 	for X in $(find /sys/class/scsi_host/host*/ | grep host_sas_address)
 	do
+		ENTRY_COUNT=$((ENTRY_COUNT + 1))
 		CTRLR_PATH=$(dirname $(realpath $X))
 		PCI_ADDR=$(printf "$CTRLR_PATH" | awk -F '/' '{print $6}')
 		PCI_HOST_PATH="$(dirname $(dirname $(dirname $CTRLR_PATH)))"
@@ -188,13 +195,13 @@ ShowMpt3SasHBAsJSON() {
 		printf "  \"version-product\": \"$VERSION_PRODUCT\"\n"
 		PREFIX="  },\n{\n"
 	done
-	printf "  }\n"
+	[[ $ENTRY_COUNT == 0 ]] || printf "  }\n"
 	printf "]}\n"
 }
 ShowMpt3SasHBAs() {
 	printf "\nRUN: ${FUNCNAME[0]}\n"
 	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
-	   .mpt3hba[]? | "\t"
+           .mpt3hba[]? | "\t"
            + ."unique-id" + ",\t"
            + ."board-name" + ",\t"
            + ."version-product" + ",\t"
@@ -355,6 +362,59 @@ GetInitiators() {
 	for TGT in "${TARGETS[@]}"
 	do
 		GetInitiatorsNoHdr $TGT $FILTERED
+	done
+}
+GetExpanderStatusStatsNoHdr(){
+	TGT=$1
+	FILTERED=$2
+	JQ=$(cat <<"EOF" | tr -d '\n\r\t'
+	. | to_entries[] | select(.key |startswith("sas-status-controller")).value[]
+	| $T + ",\t" 
+	+ (."enclosure-id" | tostring) +  ",\t"
+	+ (."baseplane-id" | tostring) + ",\t"
+	+ (."expander-id" | tostring)  + ",\t"
+	+ ."controller"  + ",\t" +
+	(."phy-index"|tostring)  + ",\t"
+	+  ."elem-status"  + ",\t"
+	+ ."change-counter"  + ",\t"
+	+ ."code-violations"  + ",\t"
+	+ ."disparity-errors"  + ",\t"
+	+ ."crc-errors" + ",\t"
+	+ ."conn-crc-errors"  + ",\t"
+	+ ."lost-dwords"  + ",\t"
+	+ ."invalid-dwords"  + ",\t"
+	+ ."reset-error-counter" + ",\t"
+	+  ."flag-bits" 
+EOF
+)
+	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
+	RESULT=$(ShowExpanderStatusStatsJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
+	printf "${RESULT}\n"
+
+}
+GetExpanderStatusStats(){
+	HDR00="controller,\t"
+	HDR01="encl,\t"
+	HDR02="bPlane,\t"
+	HDR03="expndr, "
+	HDR04="ctrlr, "
+	HDR05="phy-idx, "
+	HDR06="status,\t"
+	HDR07="chg-cntr,\t"
+	HDR08="violations,\t"
+	HDR09="disparity,\t"
+	HDR10="crc-err,\t"
+	HDR11="conn-crc,\t"
+	HDR12="lostdword,\t"
+	HDR13="invlddword,\t"
+	HDR14="reset-errcnt,\t"
+	HDR15="flag-bits,\t"
+	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}${HDR10}${HDR11}${HDR12}${HDR13}${HDR14}${HDR15}"
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	printf "${HDR}\n"
+	for TGT in "${TARGETS[@]}"
+	do
+		GetExpanderStatusStatsNoHdr "$TGT" $FILTERED
 	done
 }
 GetHostPhyStatisticsNoHdr() {
@@ -640,7 +700,9 @@ Provision8plus24lun() {
 	done
 	wait
 }
-for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
+LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
+LOG=$(echo ${LOG} | sed 's/ /_/g')
+for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks GetExpanderStatusStats
 do
-	$CMD
+	$CMD | tee -a "${LOG}"
 done
