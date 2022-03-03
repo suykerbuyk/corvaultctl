@@ -5,8 +5,8 @@ export SSHPASS='Testit123!'
 
 
 USER='manage'
-TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
-#TARGETS=("corvault-1a")
+#TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
+TARGETS=("corvault-3a")
 
 # provides a wee bit more verbosity to stderr
 DBG=0
@@ -139,7 +139,8 @@ ShowDiskGroupsJSON() {
 ShowDisksJSON() {
 	TGT=$1
 	CMD="show disks"
-	DoCmd ${TGT} "${CMD}"
+	# Fix the fork up introduced by R010 where a percent sign was injected into a value.
+	DoCmd ${TGT} "${CMD}" | tr -d '%' | sed 's/current-job-completion/current-job-completion-percent/g'
 }
 ShowVolumesJSON() {
 	TGT="$1"
@@ -410,7 +411,6 @@ GetExpanderStatusStats(){
 	HDR14="reset-errcnt,\t"
 	HDR15="flag-bits,\t"
 	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}${HDR08}${HDR09}${HDR10}${HDR11}${HDR12}${HDR13}${HDR14}${HDR15}"
-	printf "\nRUN: ${FUNCNAME[0]}\n"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
 	do
@@ -590,7 +590,7 @@ GetDisksInDiskGroups() {
 		for DG in $(echo $SHOWDISK | jq -r '.drives[]? | ."disk-group"' | sort -u)
 		do
 			printf "$TGT,\t$DG\t"
-			printf "$SHOWDISK\n"  \
+			printf "$SHOWDISK\n" \
 			| jq -r '.drives[]? | ."disk-group" + " " + ."location" ' \
 			| grep $DG | awk -F ' ' '{print $2}' | tr '\n' ',' | sed 's/,$//g' ; printf "\n"
 		done
@@ -700,9 +700,15 @@ Provision8plus24lun() {
 	done
 	wait
 }
+
 LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
 LOG=$(echo ${LOG} | sed 's/ /_/g')
-for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks GetExpanderStatusStats
+for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
 do
 	$CMD | tee -a "${LOG}"
 done
+#ShowMpt3SasHBAsJSON
+#ShowMpt3SasHBAs
+#ShowExpanderStatusStatsJSON corvault-1a
+#GetExpanderStatusStats
+#GetDisksInDiskGroups
