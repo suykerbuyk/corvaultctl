@@ -5,8 +5,8 @@ export SSHPASS='Testit123!'
 
 
 USER='manage'
-#TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
-TARGETS=("corvault-3a")
+TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
+#TARGETS=("corvault-3a")
 
 # provides a wee bit more verbosity to stderr
 DBG=0
@@ -22,6 +22,8 @@ elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
        exit 1
 fi
 
+# set dns-management-hostname controller a name corvault-3a
+# abort scrub disk-group dg01
 # An example of using the output of this utility to configure and map 
 # Initiators to volumes:
 # set initiator id 500062b206989400 nickname SAS9305-16e-SPA2500634-p0
@@ -171,8 +173,8 @@ ShowMpt3SasHBAsJSON() {
 		PCI_SUBSYSTEM_VENDOR="$(cat $PCI_HOST_PATH/subsystem_vendor)"
 		PCI_SUBSYSTEM_DEVICE="$(cat $PCI_HOST_PATH/subsystem_device)"
 		UNIQUE_ID="$(cat $CTRLR_PATH/unique_id)"
-		SAS_ADDR="$(cat $CTRLR_PATH/host_sas_address)"
-		BOARD_NAME="$(cat $CTRLR_PATH/board_name)"
+		SAS_ADDR="$(cat $CTRLR_PATH/host_sas_address | sed 's/0x//g')"
+		BOARD_NAME="$(cat $CTRLR_PATH/board_name | sed 's/ /_/g')"
 		BOARD_ASSEMBLY="$(cat $CTRLR_PATH/board_assembly)"
 		VERSION_BIOS="$(cat $CTRLR_PATH/version_bios)"
 		VERSION_FW="$(cat $CTRLR_PATH/version_fw)"
@@ -220,9 +222,9 @@ EOF
 	HDR01=" UniqueID,"
 	HDR02="          BoardName,"
 	HDR03="  ChipSet,"
-	HDR04="               SAS_Address,"
-	HDR05="      PCI_Address,"
-	HDR06="   Vendor,"
+	HDR04="           SAS_Address,"
+	HDR05="         PCI_Address,"
+	HDR06="    Vendor,"
 	HDR07=" Device,"
 	HDR08=" FirmwareVer,"
 	HDR09="        BiosVer,"
@@ -604,7 +606,7 @@ RemoveDiskGroup() {
 	CMD="remove disk-groups $DG"
 	DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
 }
-RemoveAllDiskGroups() {
+RemoveAllControllerDiskGroups() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	for DG in $(GetDiskGroups $TGT)
@@ -612,6 +614,15 @@ RemoveAllDiskGroups() {
 		RemoveDiskGroup $TGT $DG
 	done
 }
+RemoveAllDiskGroupsFromAllControllers() {
+	TGT=$1
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	for DG in $(GetDiskGroups $TGT)
+	do
+		RemoveDiskGroup $TGT $DG
+	done
+}
+
 
 CreateDiskGroups() {
 	TGT=$1
@@ -666,6 +677,55 @@ GetEcliKeyData() {
 	ShowConfigurationJSON $TGT | \
 	 jq -r '(.versions[]? | ."object-name" + "   SC_Version: " + ."sc-fw" + "   MC_Version: " +."mc-fw"),(.controllers[]? | ."durable-id" + "_internal_serial_number: " + ."internal-serial-number")'
 }
+
+GetSasBaseInitiatorIDs() {
+	for TGT in "${TARGETS[@]}"; do
+	HNAME="$(uname -n)"
+	echo "HNAME=$HNAME"
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	HBAs=$(ShowMpt3SasHBAsJSON)
+	SAS_ADDRS=$(printf "$HBAs" | jq -r '.mpt3hba[]."sas-address"' | cut -c -15)
+	echo "Gathering Initiators"
+	RPT=$(ShowInitiatorsJSON $TGT)
+	INITIATORS=$(printf "$RPT" | jq -r '.initiator[]? | select(.discovered == "Yes").id')
+	echo "Recommendations:"
+	for SAS_ADDR in ${SAS_ADDRS}
+	do 
+		#echo "Looking for HBA $SAS_ADDR"
+		for INIT in $INITIATORS
+		do
+			#echo "$HBA $INIT"
+			if grep -q "$SAS_ADDR" <<< "$INIT"; then
+				#echo "Matched $SAS_ADDR in $INIT"
+				P=""
+				PORT_IDX=$(echo $INIT | sed "s/$SAS_ADDR//g")
+				#echo "PortIDX=$PORT_IDX"
+				case $PORT_IDX in
+				"0")
+					P="0"
+				;;
+				"1")
+					P="1"
+				;;
+				"8")
+					P="2"
+				;;
+				"9")
+					P="3"
+				;;
+				*)
+					P="UNK"
+				;;
+				esac
+				NICK_NAME=$(printf "$HBAs" \
+					| jq --arg SAS_ADDR $SAS_ADDR --arg HNAME "${HNAME}" --arg PORT $P -r \
+					'.mpt3hba[] | select (."sas-address" | contains($SAS_ADDR)) | $HNAME + "-" + ."board-name" + "-" + ."unique-id" + "-P" + $PORT')
+				printf "  export SSHPASS='${SSHPASS}'; sshpass -e ssh ${USER}@${TGT} 'set cli-parameters json; set initiator id $INIT nickname $NICK_NAME'\n"
+			fi
+		done
+	done
+	done
+}
 ProvisionSystem() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
@@ -700,15 +760,34 @@ Provision8plus24lun() {
 	done
 	wait
 }
-
-LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
-LOG=$(echo ${LOG} | sed 's/ /_/g')
-for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
-do
-	$CMD | tee -a "${LOG}"
-done
+GatherInfo() {
+	LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
+	LOG=$(echo ${LOG} | sed 's/ /_/g')
+	for CMD in ShowMpt3SasHBAs GetInquiry GetPowerReadings GetVolumes GetInitiators GetMaps GetDiskGroups GetDisksInDiskGroups GetHostPhyStatistics GetDisks
+	do
+		$CMD | tee -a "${LOG}"
+	done
+}
+GetInitiatorNaming() {
+	LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
+	LOG=$(echo ${LOG} | sed 's/ /_/g')
+	for CMD in ShowMpt3SasHBAs GetInitiators GetMaps GetDiskGroups
+	do
+		$CMD | tee -a "${LOG}"
+	done
+}
 #ShowMpt3SasHBAsJSON
 #ShowMpt3SasHBAs
 #ShowExpanderStatusStatsJSON corvault-1a
 #GetExpanderStatusStats
 #GetDisksInDiskGroups
+#GetInitiatorNaming
+#ShowMpt3SasHBAsJSON corvault-3a
+#ShowMpt3SasHBAsJSON corvault-3a >hbas.json
+#ShowInitiatorsJSON corvault-3a
+#ShowConfigurationJSON 172.16.17.49
+#GetInitiators
+#GetSasBaseInitiatorIDs
+#RemoveAllDiskGroups
+GatherInfo
+
