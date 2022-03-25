@@ -128,6 +128,11 @@ ShowHostPhyStatisticsJSON() {
 	CMD="show host-phy-statistics"
 	DoCmd ${TGT} "${CMD}"
 }
+ShowHostsGroupsJSON() {
+	TGT=$1
+	CMD="show host-groups"
+	DoCmd ${TGT} "${CMD}"
+}
 ShowExpanderStatusStatsJSON() {
 	TGT=$1
 	CMD="show expander-status stats"
@@ -455,7 +460,7 @@ EOF
 }
 GetHostPhyStatistics() {
 	TGT=$1
-	FILTERED=0
+	FILTERED=1
 	if [[ $FILTERED == 0 ]]; then
 		printf "\nRUN: ${FUNCNAME[0]} (unfiltered)\n"
 	else
@@ -583,7 +588,7 @@ GetDiskGroups() {
 	done
 }
 GetDisksInDiskGroups() {
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	printf "RUN: $TGT ${FUNCNAME[0]}\n"
 	HDR="controller,\tdisk-group,\tdisks"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
@@ -601,29 +606,42 @@ GetDisksInDiskGroups() {
 }
 RemoveDiskGroup() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	DG=$2
+	printf "RUN: $TGT ${FUNCNAME[0]} $DG \n"
 	CMD="remove disk-groups $DG"
 	DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
 }
 RemoveAllControllerDiskGroups() {
 	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	for DG in $(GetDiskGroups $TGT)
+	printf "RUN: $TGT ${FUNCNAME[0]}\n"
+	for SERIAL in $(ShowDiskGroupsJSON "${TGT}"  | jq -r '."disk-groups"[]? | ."serial-number"')
 	do
-		RemoveDiskGroup $TGT $DG
+		RemoveDiskGroup $TGT $SERIAL
 	done
 }
 RemoveAllDiskGroupsFromAllControllers() {
-	TGT=$1
-	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
-	for DG in $(GetDiskGroups $TGT)
-	do
-		RemoveDiskGroup $TGT $DG
+	printf "RUN: $TGT ${FUNCNAME[0]}\n"
+	for TGT in ${TARGETS[*]}; do
+		RemoveAllControllerDiskGroups $TGT
 	done
 }
+RemoveAllInitiatorNickNames() {
+	printf "RUN: $TGT ${FUNCNAME[0]}\n"
+	for TGT in ${TARGETS[*]}; do
+		CMD="delete host-groups delete-hosts all"
+		printf "${TGT} ${CMD}  "
+		DoCmd "${TGT}" "${CMD}" | jq -r '.status[]."response-type"'
+		for NICK in $(ShowInitiatorsJSON $TGT  | jq -r '.initiator[]? | .nickname')
+		do
+			if [[ "X$NICK" != "$X" ]]; then
+				CMD="delete initiator-nickname $NICK"
+				printf "${TGT} ${CMD}  "
+				DoCmd "${TGT}" "${CMD}" | jq -r '.status[]."response-type"'
+			fi
+		done
+	done
 
-
+}
 CreateDiskGroups() {
 	TGT=$1
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
@@ -631,8 +649,16 @@ CreateDiskGroups() {
 	CMD="${CMD} type linear level adapt stripe-width 16+2 spare-capacity 20.0TiB interleaved-volume-count 1"
 	POOL1="assigned-to a disks 0.0-11,0.24-35,0.48-59,0.72-83,0.96-100 dg01"
 	POOL2="assigned-to b disks 0.12-23,0.36-47,0.60-71,0.84-95,0.101-105 dg02"
-	DoCmd ${TGT} ${CMD} ${POOL1} >/dev/null #don't care about the output
-	DoCmd ${TGT} ${CMD} ${POOL2} >/dev/null #don't care about the output
+	printf "${TGT} ${CMD} ${POOL1} "
+	DoCmd ${TGT} ${CMD} ${POOL1} | jq -r '.status[]."response-type"'
+	printf "${TGT} ${CMD} ${POOL2} "
+	DoCmd ${TGT} ${CMD} ${POOL2} | jq -r '.status[]."response-type"'
+}
+CreateAllDiskGroupsOnAllControllers() {
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	for TGT in ${TARGETS[*]}; do
+		CreateDiskGroups $TGT
+	done
 }
 CreateFourLun8plus2ADAPT() {
 	TGT=$1
@@ -654,6 +680,17 @@ CreateFourLun8plus2ADAPT() {
 	done
 }
 
+ResetHostSasLinks() {
+	for TGT in "${TARGETS[@]}"; do
+		printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+		CMD="reset host-link ports A1"
+		printf "  $CMD "
+		DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
+		CMD="reset host-link ports B1"
+		printf "  $CMD "
+		DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
+	done
+}
 
 GetPowerReadings() {
 	TGT=$1
@@ -681,7 +718,6 @@ GetEcliKeyData() {
 GetSasBaseInitiatorIDs() {
 	for TGT in "${TARGETS[@]}"; do
 	HNAME="$(uname -n)"
-	echo "HNAME=$HNAME"
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HBAs=$(ShowMpt3SasHBAsJSON)
 	SAS_ADDRS=$(printf "$HBAs" | jq -r '.mpt3hba[]."sas-address"' | cut -c -15)
@@ -721,6 +757,55 @@ GetSasBaseInitiatorIDs() {
 					| jq --arg SAS_ADDR $SAS_ADDR --arg HNAME "${HNAME}" --arg PORT $P -r \
 					'.mpt3hba[] | select (."sas-address" | contains($SAS_ADDR)) | $HNAME + "-" + ."board-name" + "-" + ."unique-id" + "-P" + $PORT')
 				printf "  export SSHPASS='${SSHPASS}'; sshpass -e ssh ${USER}@${TGT} 'set cli-parameters json; set initiator id $INIT nickname $NICK_NAME'\n"
+			fi
+		done
+	done
+	done
+}
+SetSasBaseInitiatorIDs() {
+	for TGT in "${TARGETS[@]}"; do
+	HNAME="$(uname -n)"
+	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+	HBAs=$(ShowMpt3SasHBAsJSON)
+	SAS_ADDRS=$(printf "$HBAs" | jq -r '.mpt3hba[]."sas-address"' | cut -c -15)
+	echo "Gathering Initiators"
+	RPT=$(ShowInitiatorsJSON $TGT)
+	INITIATORS=$(printf "$RPT" | jq -r '.initiator[]? | select(.discovered == "Yes").id')
+	echo "Recommendations:"
+	for SAS_ADDR in ${SAS_ADDRS}
+	do 
+		#echo "Looking for HBA $SAS_ADDR"
+		for INIT in $INITIATORS
+		do
+			#echo "$HBA $INIT"
+			if grep -q "$SAS_ADDR" <<< "$INIT"; then
+				#echo "Matched $SAS_ADDR in $INIT"
+				P=""
+				PORT_IDX=$(echo $INIT | sed "s/$SAS_ADDR//g")
+				#echo "PortIDX=$PORT_IDX"
+				case $PORT_IDX in
+				"0")
+					P="0"
+				;;
+				"1")
+					P="1"
+				;;
+				"8")
+					P="2"
+				;;
+				"9")
+					P="3"
+				;;
+				*)
+					P="UNK"
+				;;
+				esac
+				NICK_NAME=$(printf "$HBAs" \
+					| jq --arg SAS_ADDR $SAS_ADDR --arg HNAME "${HNAME}" --arg PORT $P -r \
+					'.mpt3hba[] | select (."sas-address" | contains($SAS_ADDR)) | $HNAME + "-" + ."board-name" + "-" + ."unique-id" + "-P" + $PORT')
+				CMD="set initiator id $INIT nickname $NICK_NAME"
+				printf "${TGT} ${CMD}  "
+				DoCmd "${TGT}" "${CMD}" | jq -r '.status[]."response-type"'
 			fi
 		done
 	done
@@ -769,7 +854,7 @@ GatherInfo() {
 	done
 }
 GetInitiatorNaming() {
-	LOG="cvt_config_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
+	LOG="cvt_initiators_$(date +"%F_%H-%M-%S")_$(uname -n).txt"
 	LOG=$(echo ${LOG} | sed 's/ /_/g')
 	for CMD in ShowMpt3SasHBAs GetInitiators GetMaps GetDiskGroups
 	do
@@ -782,12 +867,15 @@ GetInitiatorNaming() {
 #GetExpanderStatusStats
 #GetDisksInDiskGroups
 #GetInitiatorNaming
-#ShowMpt3SasHBAsJSON corvault-3a
-#ShowMpt3SasHBAsJSON corvault-3a >hbas.json
 #ShowInitiatorsJSON corvault-3a
-#ShowConfigurationJSON 172.16.17.49
 #GetInitiators
 #GetSasBaseInitiatorIDs
-#RemoveAllDiskGroups
-GatherInfo
+#RemoveAllDiskGroupsFromAllControllers
+#RemoveAllInitiatorNickNames
+#CreateAllDiskGroupsOnAllControllers
+#SetSasBaseInitiatorIDs
+#ResetHostSasLinks
+
+#GatherInfo
+GetHostPhyStatistics
 
