@@ -3,6 +3,7 @@
 set -e
 export SSHPASS='Testit123!'
 
+JSON_LOG_DIR='json.logs'
 
 USER='manage'
 TARGETS=("corvault-1a" "corvault-2a" "corvault-3a")
@@ -20,6 +21,10 @@ if [[ $(which jq 2>&1>/dev/null) ]]; then
 elif [[ $(which sshpass 2>&1>/dev/null) ]]; then
        echo "Please intall sshpass"
        exit 1
+fi
+
+if [[ ! -d "${JSON_LOG_DIR}" ]]; then
+	mkdir "${JSON_LOG_DIR}"
 fi
 
 # set dns-management-hostname controller a name corvault-3a
@@ -99,10 +104,10 @@ DoCmd() {
 	[[ $DBG != 0 ]] && printf "STAT: %s\n" "$STAT" 1>&2
 	if [ "${STAT}" != "Success" ] ; then
 		echo "${REPLY}" >"${REPLY_FILE}"
-		echo "Error: $BASE_CMD $@" 1>&2;
-		echo "Status: ${STAT}" 1>&2;
-		echo "Response: ${RESP}" 1>&2;
-		echo "See ${REPLY} for full JSON return data" 1>&2;
+		#echo "Error: $BASE_CMD $@" 1>&2;
+		echo "Status: ${STAT} ${RESP}" 1>&2;
+		#echo "Response: ${RESP}" 1>&2;
+		#echo "See ${REPLY} for full JSON return data" 1>&2;
 		exit 1
 	fi
 	[[ $DBG != 0 ]] && echo "Status: ${STAT}" 1>&2
@@ -111,58 +116,59 @@ DoCmd() {
 ShowInquiryJSON() {
 	TGT=$1
 	CMD="show inquiry"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_inquiry.json"
 }
 ShowSensorStatusJSON() {
 	TGT=$1
 	CMD="show sensor-status"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_sensor-status.json"
 }
 ShowConfigurationJSON() {
 	TGT=$1
 	CMD="show configuration"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_configuration.json"
 }
 ShowHostPhyStatisticsJSON() {
 	TGT=$1
 	CMD="show host-phy-statistics"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_host-phy-satistics.json"
 }
 ShowHostsGroupsJSON() {
 	TGT=$1
 	CMD="show host-groups"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_host-groups.json"
 }
 ShowExpanderStatusStatsJSON() {
 	TGT=$1
 	CMD="show expander-status stats"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_expander-status.json"
 }
 ShowDiskGroupsJSON() {
 	TGT="$1"
 	CMD="show disk-groups"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_disk-groups.json"
 }
 ShowDisksJSON() {
 	TGT=$1
 	CMD="show disks"
 	# Fix the fork up introduced by R010 where a percent sign was injected into a value.
-	DoCmd ${TGT} "${CMD}" | tr -d '%' | sed 's/current-job-completion/current-job-completion-percent/g'
+	DoCmd ${TGT} "${CMD}" | tr -d '%' | sed 's/current-job-completion/current-job-completion-percent/g' \
+		 | tee "${JSON_LOG_DIR}/${TGT}_show_disks.json"
 }
 ShowVolumesJSON() {
 	TGT="$1"
 	CMD="show volumes"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_volumes.json"
 }
 ShowInitiatorsJSON() {
 	TGT="$1"
 	CMD="show initiators"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_initiators.json"
 }
 ShowMapsJSON() {
 	TGT="$1"
 	CMD="show maps"
-	DoCmd ${TGT} "${CMD}"
+	DoCmd ${TGT} "${CMD}" | tee "${JSON_LOG_DIR}/${TGT}_show_maps.json"
 }
 ShowMpt3SasHBAsJSON() {
 	ENTRY_COUNT=0
@@ -204,7 +210,7 @@ ShowMpt3SasHBAsJSON() {
 		PREFIX="  },\n{\n"
 	done
 	[[ $ENTRY_COUNT == 0 ]] || printf "  }\n"
-	printf "]}\n"
+	printf "]}\n" | tee "${JSON_LOG_DIR}/mpt3sas_hbas.json"
 }
 ShowMpt3SasHBAs() {
 	printf "\nRUN: ${FUNCNAME[0]}\n"
@@ -296,7 +302,7 @@ GetVolumesNoHdr() {
 EOF
 )
 	[[ $DBG != 0 ]] && printf "JQ : %s\n" "${JQ}" 1>&2
-	RESULT=$(ShowVolumesJSON $TGT | jq --arg T "$TGT" -r "${JQ}")
+	RESULT=$(ShowVolumesJSON $TGT | jq --arg T "$TGT" -r "${JQ}" | sed 's:%::g')
 	printf "${RESULT}\n"
 }
 GetVolumes() {
@@ -717,7 +723,7 @@ GetEcliKeyData() {
 
 GetSasBaseInitiatorIDs() {
 	for TGT in "${TARGETS[@]}"; do
-	HNAME="$(uname -n)"
+	HNAME="$(uname -n  | cut -b 1-10)"
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HBAs=$(ShowMpt3SasHBAsJSON)
 	SAS_ADDRS=$(printf "$HBAs" | jq -r '.mpt3hba[]."sas-address"' | cut -c -15)
@@ -732,7 +738,14 @@ GetSasBaseInitiatorIDs() {
 		do
 			#echo "$HBA $INIT"
 			if grep -q "$SAS_ADDR" <<< "$INIT"; then
-				#echo "Matched $SAS_ADDR in $INIT"
+				CTLR_PORT="XX"
+				A_CTRLR_PORT=$(printf "$RPT" | jq --arg I "${INIT}" -r '.initiator[]? | select((.discovered == "Yes") and .id == $I) | (."host-port-bits-a"| tostring)')
+				B_CTRLR_PORT=$(printf "$RPT" | jq --arg I "${INIT}" -r '.initiator[]? | select((.discovered == "Yes") and .id == $I) | (."host-port-bits-b"| tostring)')
+				if [[ ${A_CTRLR_PORT} != 0 ]] ; then
+					CTRLR_PORT="A${A_CTRLR_PORT}"
+				elif [[ ${B_CTRLR_PORT} != 0 ]] ; then
+					CTRLR_PORT="B${B_CTRLR_PORT}"
+				fi
 				P=""
 				PORT_IDX=$(echo $INIT | sed "s/$SAS_ADDR//g")
 				#echo "PortIDX=$PORT_IDX"
@@ -756,22 +769,22 @@ GetSasBaseInitiatorIDs() {
 				NICK_NAME=$(printf "$HBAs" \
 					| jq --arg SAS_ADDR $SAS_ADDR --arg HNAME "${HNAME}" --arg PORT $P -r \
 					'.mpt3hba[] | select (."sas-address" | contains($SAS_ADDR)) | $HNAME + "-" + ."board-name" + "-" + ."unique-id" + "-P" + $PORT')
+				NICK_NAME="${NICK_NAME}${CTRLR_PORT}"
 				printf "  export SSHPASS='${SSHPASS}'; sshpass -e ssh ${USER}@${TGT} 'set cli-parameters json; set initiator id $INIT nickname $NICK_NAME'\n"
 			fi
 		done
 	done
 	done
 }
-SetSasBaseInitiatorIDs() {
+MapVolumes() {
 	for TGT in "${TARGETS[@]}"; do
-	HNAME="$(uname -n)"
+	HNAME="$(uname -n  | cut -b 1-10)"
 	printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
 	HBAs=$(ShowMpt3SasHBAsJSON)
 	SAS_ADDRS=$(printf "$HBAs" | jq -r '.mpt3hba[]."sas-address"' | cut -c -15)
 	echo "Gathering Initiators"
 	RPT=$(ShowInitiatorsJSON $TGT)
 	INITIATORS=$(printf "$RPT" | jq -r '.initiator[]? | select(.discovered == "Yes").id')
-	echo "Recommendations:"
 	for SAS_ADDR in ${SAS_ADDRS}
 	do 
 		#echo "Looking for HBA $SAS_ADDR"
@@ -779,7 +792,48 @@ SetSasBaseInitiatorIDs() {
 		do
 			#echo "$HBA $INIT"
 			if grep -q "$SAS_ADDR" <<< "$INIT"; then
-				#echo "Matched $SAS_ADDR in $INIT"
+				CTLR_PORT="XX"
+				A_CTRLR_PORT=$(printf "$RPT" | jq --arg I "${INIT}" -r '.initiator[]? | select((.discovered == "Yes") and .id == $I) | (."host-port-bits-a"| tostring)')
+				case $A_CTRLR_PORT in
+				"1")
+					A_CTRLR_PORT="a0"
+				;;
+				"2")
+					A_CTRLR_PORT="a1"
+				;;
+				"4")
+					A_CTRLR_PORT="a2"
+				;;
+				"8")
+					A_CTRLR_PORT="a3"
+				;;
+				*)
+					A_CTRLR_PORT=""
+				;;
+				esac
+				B_CTRLR_PORT=$(printf "$RPT" | jq --arg I "${INIT}" -r '.initiator[]? | select((.discovered == "Yes") and .id == $I) | (."host-port-bits-b"| tostring)')
+				case $B_CTRLR_PORT in
+				"1")
+					B_CTRLR_PORT="b0"
+				;;
+				"2")
+					B_CTRLR_PORT="b1"
+				;;
+				"4")
+					B_CTRLR_PORT="b2"
+				;;
+				"8")
+					B_CTRLR_PORT="b3"
+				;;
+				*)
+					B_CTRLR_PORT=""
+				;;
+				esac
+				if [[ ${A_CTRLR_PORT} != "" ]] ; then
+					CTRLR_PORT="${A_CTRLR_PORT}"
+				elif [[ ${B_CTRLR_PORT} != "" ]] ; then
+					CTRLR_PORT="${B_CTRLR_PORT}"
+				fi
 				P=""
 				PORT_IDX=$(echo $INIT | sed "s/$SAS_ADDR//g")
 				#echo "PortIDX=$PORT_IDX"
@@ -797,15 +851,36 @@ SetSasBaseInitiatorIDs() {
 					P="3"
 				;;
 				*)
-					P="UNK"
+					P="U"
 				;;
 				esac
 				NICK_NAME=$(printf "$HBAs" \
 					| jq --arg SAS_ADDR $SAS_ADDR --arg HNAME "${HNAME}" --arg PORT $P -r \
 					'.mpt3hba[] | select (."sas-address" | contains($SAS_ADDR)) | $HNAME + "-" + ."board-name" + "-" + ."unique-id" + "-P" + $PORT')
+				NICK_NAME="${NICK_NAME}${CTRLR_PORT}"
 				CMD="set initiator id $INIT nickname $NICK_NAME"
 				printf "${TGT} ${CMD}  "
 				DoCmd "${TGT}" "${CMD}" | jq -r '.status[]."response-type"'
+				printf "\nGathering Volumes\n"
+				VOLS="$(ShowVolumesJSON $TGT)"
+				A_VOLS="$(echo $VOLS| jq -r '.volumes[]? | select(.owner == "A")."serial-number"')"
+				B_VOLS="$(echo $VOLS| jq -r '.volumes[]? | select(.owner == "B")."serial-number"')"
+				for V in $A_VOLS; do
+					#echo "A volume: $V"
+					if [ "$A_VOLS" != "" ] &&  [ "X${A_CTRLR_PORT}" != "X" ]; then
+						CMD="map volume $V ports ${CTRLR_PORT} initiator $NICK_NAME lun 8"
+						printf "$CMD "
+						DoCmd "$TGT" "$CMD" | jq -r '.status[]."response-type"'
+					fi
+				done
+				for V in $B_VOLS; do
+					#echo "B volume: $V"
+					if [ "$B_VOLS" != "" ] && [ "X${B_CTRLR_PORT}" != "X" ]; then
+						CMD="map volume $V ports ${CTRLR_PORT} initiator $NICK_NAME lun 8"
+						printf "$CMD "
+						DoCmd "$TGT" "$CMD" | jq -r '.status[]."response-type"'
+					fi
+				done
 			fi
 		done
 	done
@@ -867,15 +942,13 @@ GetInitiatorNaming() {
 #GetExpanderStatusStats
 #GetDisksInDiskGroups
 #GetInitiatorNaming
-#ShowInitiatorsJSON corvault-3a
 #GetInitiators
+#GetHostPhyStatistics
+#GetVolumes
 #GetSasBaseInitiatorIDs
 #RemoveAllDiskGroupsFromAllControllers
 #RemoveAllInitiatorNickNames
 #CreateAllDiskGroupsOnAllControllers
-#SetSasBaseInitiatorIDs
+#MapVolumes
 #ResetHostSasLinks
-
 #GatherInfo
-GetHostPhyStatistics
-
