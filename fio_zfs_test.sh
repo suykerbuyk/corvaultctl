@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 POOL_NAME=cvt
-LUN_PATTERN="/dev/disk/by-id/scsi-SSEAGATE_6575_00c0f*"
+LUN_PATTERN="/dev/disk/by-id/wwn-0x600c0ff000*"
 LOGDIR=test
 
 if [ ! -d ${LOGDIR} ]; then
@@ -9,7 +9,7 @@ if [ ! -d ${LOGDIR} ]; then
 fi
 
 
-echo 1000 >/sys/module/zfs/parameters/zfs_multihost_fail_intervals
+SCRIPT_NAME="$(basename "$(test -L "$0" && readlink "$0" || echo "$0")")"
 
 wipe_zfs_pools() {
 	for POOL in $(zpool list -H | grep $POOL_NAME | awk '{print $1}')
@@ -53,8 +53,6 @@ rescan_scsi_bus() {
 	wait
 }
 
-
-
 create_draid_zpool() {
 	wipe_zfs_pool
 	zpool create ${POOL_NAME}  -O recordsize=512K -O atime=off -O dnodesize=auto -o ashift=12 draid2:4d:6c:0s  ${LUN_PATTERN}
@@ -66,7 +64,7 @@ create_raidz2_zpool() {
 create_individual_pools() {
 	wipe_zfs_pools
 	IDX=0
-	for X in $(ls ${LUN_PATTERN} | grep -v part)
+	for X in $(ls ${LUN_PATTERN} | grep -v part | grep -v '00c0ff512e8100003801326201000000' )
 	do
 		zpool create ${POOL_NAME}_${IDX}  -O recordsize=512K -O atime=off -O dnodesize=auto -o ashift=12 $X
 		IDX=$((IDX+1))
@@ -78,22 +76,21 @@ wipe_zfs_pools
 rescan_scsi_bus
 create_individual_pools
 #clear all dmesg history
-dmesg -c
-#for IOENGINE in libaio io_uring; do
-for IOENGINE in libaio ; do
+#dmesg -c
+echo "Start: $SCRIPT_NAME">/dev/kmsg
+for IOENGINE in libaio io_uring; do
 	for IODEPTH in 1 8 16 32; do
 		for JOBS in 1 4 8 16 32; do
-			#for PAT in 'write' 'read' 'randrw' 'randread' 'randwrite'; do
-			for PAT in 'write'  'randrw' 'randwrite'; do
-				#for BLK in 32k 128k 256k 512k 1024k; do
-				for BLK in 1024k 8192k 32768k; do
+			for PAT in 'write' 'read' 'randrw' 'randread' 'randwrite'; do
+				for BLK in 4096 8192 16384 32768 131072 262144 524288 1048576 4194304 16777216; do
 					for POOL in $(zpool list -H | grep $POOL_NAME | awk '{print $1}')
 					do
 						TEST="${POOL}-${IOENGINE}-${IODEPTH}-${PAT}-${BLK}-${JOBS}.fio.json"
 						echo "Running $TEST"
 						zpool clear ${POOL}
-						fio --directory=/${POOL} \
+						/root/fio --directory=/${POOL} \
 						    --name="${TEST}" \
+						    --size=128G \
 						    --rw=$PAT \
 						    --group_reporting=1 \
 						    --bs=$BLK \
@@ -101,9 +98,9 @@ for IOENGINE in libaio ; do
 						    --numjobs=$JOBS \
 						    --time_based=1 \
 						    --runtime=30 \
+						    --random_generator=tausworthe64 \
 						    --iodepth=$IODEPTH \
 						    --ioengine=$IOENGINE \
-						    --size=128G \
 						    --output-format=json | tee "$PWD/${LOGDIR}/${TEST}" && \
 						echo "Completed" &
 					done
@@ -113,3 +110,4 @@ for IOENGINE in libaio ; do
 		done
 	done
 done
+echo "Stop: $SCRIPT_NAME">/dev/kmsg
