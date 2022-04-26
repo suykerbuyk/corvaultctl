@@ -5,7 +5,7 @@ do
 	echo "zpool destroy $P"
 	zpool destroy $P
 done
-LUN_PATTERN="/dev/disk/by-id/scsi-SSEAGATE_6575_00c0f*"
+LUN_PATTERN="/dev/disk/by-id/wwn-0x600c0ff000*"
 # clear out the primary ZFS partion
 for X in $(ls ${LUN_PATTERN} | grep part1)
 do
