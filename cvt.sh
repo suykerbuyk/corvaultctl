@@ -697,6 +697,23 @@ ResetHostSasLinks() {
 		DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
 	done
 }
+ResetSCs() {
+	for TGT in "${TARGETS[@]}"; do
+		printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+		CMD="restart sc both"
+		printf "  $CMD "
+		DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
+	done
+}
+ResetMCs() {
+	for TGT in "${TARGETS[@]}"; do
+		printf "\nRUN: $TGT ${FUNCNAME[0]}\n"
+		CMD="restart mc both"
+		printf "  $CMD "
+		DoCmd ${TGT} ${CMD} | jq -r '.status[]."response-type"'
+	done
+}
+
 
 GetPowerReadings() {
 	TGT=$1
