@@ -54,11 +54,11 @@ rescan_scsi_bus() {
 }
 
 create_draid_zpool() {
-	wipe_zfs_pool
+	wipe_zfs_pools
 	zpool create ${POOL_NAME}  -O recordsize=512K -O atime=off -O dnodesize=auto -o ashift=12 draid2:4d:6c:0s  ${LUN_PATTERN}
 }
 create_raidz2_zpool() {
-	wipe_zfs_pool
+	wipe_zfs_pools
 	zpool create ${POOL_NAME}  -O recordsize=512K -O atime=off -O dnodesize=auto -o ashift=12 raidz2  ${LUN_PATTERN}
 }
 create_individual_pools() {
@@ -71,12 +71,15 @@ create_individual_pools() {
 	done
 }
 
-
-wipe_zfs_pools
-rescan_scsi_bus
-create_individual_pools
+#rescan_scsi_bus
+#create_individual_pools
+#create_draid_zpool
+create_raidz2_zpool
 #clear all dmesg history
-#dmesg -c
+dmesg -C
+echo 1 > /sys/module/zfs/parameters/zfs_disable_failfast
+echo $((32 * 1024 * 1024 *1024)) > /sys/module/zfs/parameters/zfs_arc_max
+echo 0x0006020A >/sys/module/mpt3sas/parameters/logging_level
 echo "Start: $SCRIPT_NAME">/dev/kmsg
 for IOENGINE in libaio io_uring; do
 	for IODEPTH in 1 8 16 32; do
@@ -87,8 +90,8 @@ for IOENGINE in libaio io_uring; do
 					do
 						TEST="${POOL}-${IOENGINE}-${IODEPTH}-${PAT}-${BLK}-${JOBS}.fio.json"
 						echo "Running $TEST"
-						zpool clear ${POOL}
-						/root/fio --directory=/${POOL} \
+						#zpool clear ${POOL}
+						fio --directory=/${POOL} \
 						    --name="${TEST}" \
 						    --size=128G \
 						    --rw=$PAT \

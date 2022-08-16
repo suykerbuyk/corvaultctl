@@ -76,7 +76,8 @@ create_individual_pools() {
 #rescan_scsi_bus
 #create_individual_pools
 #clear all dmesg history
-#dmesg -c
+dmesg -C
+echo 0x0006020A >/sys/module/mpt3sas/parameters/logging_level
 echo "Start: $SCRIPT_NAME">/dev/kmsg
 for IOENGINE in libaio io_uring ; do
 	for IODEPTH in 1 8 16 32; do
@@ -84,14 +85,14 @@ for IOENGINE in libaio io_uring ; do
 			for PAT in 'write' 'read' 'randrw' 'randread' 'randwrite'; do
 				for BLK in 4096 8192 16384 32768 131072 262144 524288 1048576 4194304 16777216; do
 				#for BLK in 1024k 8192k 32768k; do
-					for BLKDEV in $(ls $LUN_PATTERN | sed 's:/dev/disk/by-id/::g')
+					for BLKDEV in $(ls $LUN_PATTERN | grep -v part | sed 's:/dev/disk/by-id/::g')
 					do
 						BLKDEV_KDEV="$(readlink /dev/disk/by-id/${BLKDEV} |  tr -d '.|\/')"
 						BLKDEV_NAME="${BLKDEV}_${BLKDEV_KDEV}"
 						BLKDEV_NAME="$(echo $BLKDEV_NAME | sed 's/-/_/g')"
 						TEST="${BLKDEV_NAME}-${IOENGINE}-${IODEPTH}-${PAT}-${BLK}-${JOBS}.fio.json"
 						echo "Running $TEST"
-						/root/fio --filename=/dev/disk/by-id/${BLKDEV} \
+						fio --filename=/dev/disk/by-id/${BLKDEV} \
 						    --name="${TEST}" \
 						    --size=128G \
 						    --rw=$PAT \
