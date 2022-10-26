@@ -542,7 +542,8 @@ GetDiskGroupsNoHdr() {
 	 | $T + ",\t"
 	 + .name +",\t" + .size + ",\t"
 	 + ."storage-type" + ",\t\t"
-	 + .raidtype + ",\t\t"
+	 + .raidtype + ",\t"
+	 + ."stripe-width" + ",\t"
 	 + (."diskcount"|tostring)
 	 + ",\t\t" + .owner + ",\t"
 	 + ."serial-number"
@@ -559,9 +560,10 @@ GetDiskGroups() {
 	HDR02="size,           "
 	HDR03="storage-type,\t"
 	HDR04="raid-type,\t"
-	HDR05="disk-count,\t"
-	HDR06="owner,\t"
-	HDR07="serial-number"
+	HDR05="strip-width,\t\t"
+	HDR06="disk-count,\t"
+	HDR07="owner,\t"
+	HDR08="serial-number"
 	HDR="${HDR00}${HDR01}${HDR02}${HDR03}${HDR04}${HDR05}${HDR06}${HDR07}"
 	printf "${HDR}\n"
 	for TGT in "${TARGETS[@]}"
@@ -908,11 +910,18 @@ ProvisionHighPerfBlock() {
 	Create_2DG_8plus2_ADAPT 24
 	MapVolumes
 }
-ProvisionForZFS() {
+ProvisionForZFS16plus2() {
 	printf "\nRUN: ${FUNCNAME[0]}\n"
 	RemoveAllDiskGroupsFromAllControllers
 	RemoveAllInitiatorNickNames
 	Create_2DG_16plus2_ADAPT 1
+	MapVolumes
+}
+ProvisionForZFS8plus2() {
+	printf "\nRUN: ${FUNCNAME[0]}\n"
+	RemoveAllDiskGroupsFromAllControllers
+	RemoveAllInitiatorNickNames
+	Create_2DG_8plus2_ADAPT 1
 	MapVolumes
 }
 GatherInfo() {
@@ -970,49 +979,32 @@ GetEnclosureInfo() {
 		echo "$SYS_SERIAL $SYS_NAME controller_b $B_HOSTNAME $B_IP $B_SERIAL"
 	done | sort -u
 }
-#ShowMpt3SasHBAsJSON
-#ShowMpt3SasHBAs
-#ShowExpanderStatusStatsJSON corvault-1a
-#GetExpanderStatusStats
-#GetDisksInDiskGroups
-#GetInitiatorNaming
-#GetInitiators
-#GetHostPhyStatistics
-#GetVolumes
-#GetSasBaseInitiatorIDs
-
-#RemoveAllDiskGroupsFromAllControllers
-#RemoveAllInitiatorNickNames
-#CreateAllDiskGroupsOnAllControllers
-#MapVolumes
-
-#ResetHostSasLinks
-#GatherInfo
-#ResetSCs
-#ResetMCs
-
+SelectTarget() {
+	cmd=(dialog --keep-tite --menu "Corvault Config Options:" 22 76 16)
+}
 ShowMenu() {
 	cmd=(dialog --keep-tite --menu "Corvault Config Options:" 22 76 16)
 
 	options=(1 "ProvisionHighPerfBlock"
-		 2 "ProvisionForZFS"
-		 3 "ShowMpt3SasHBAs"
-		 4 "GatherInfo"
-		 5 "GetExpanderStatusStats"
-		 6 "GetEnclosureInfo"
-		 7 "Get_IPs"
-		 8 "GetDisksInDiskGroups"
-		 9 "GetInitiators"
-		 a "GetInitiatorNaming"
-		 b "GetHostPhyStatistics"
-		 c "GetVolumes"
-		 d "GetSasBaseInitiatorIDs"
-		 e "ResetHostSasLinks"
-		 f "ResetSCs"
-		 g "ResetMCs"
-		 h "RemoveAllDiskGroupsFromAllControllers"
-		 i "RemoveAllInitiatorNickNames"
-		 j "MapVolumes"
+		 2 "ProvisionForZFS16plus2"
+		 3 "ProvisionForZFS8plus2"
+		 4 "ShowMpt3SasHBAs"
+		 5 "GatherInfo"
+		 6 "GetExpanderStatusStats"
+		 7 "GetEnclosureInfo"
+		 8 "Get_IPs"
+		 9 "GetDisksInDiskGroups"
+		 a "GetInitiators"
+		 b "GetInitiatorNaming"
+		 c "GetHostPhyStatistics"
+		 d "GetVolumes"
+		 e "GetSasBaseInitiatorIDs"
+		 f "ResetHostSasLinks"
+		 g "ResetSCs"
+		 h "ResetMCs"
+		 i "RemoveAllDiskGroupsFromAllControllers"
+		 j "RemoveAllInitiatorNickNames"
+		 k "MapVolumes"
 		 x "Exit"
 	 )
 
@@ -1026,57 +1018,60 @@ ShowMenu() {
 				ProvisionHighPerfBlock
 				;;
 			2)
-				ProvisionForZFS
+				ProvisionForZFS16plus2
 				;;
 			3)
-				ShowMpt3SasHBAs
+				ProvisionForZFS8plus2
 				;;
 			4)
-				GatherInfo
+				ShowMpt3SasHBAs
 				;;
 			5)
-				GetExpanderStatusStats
+				GatherInfo
 				;;
 			6)
-				GetEnclosureInfo
+				GetExpanderStatusStats
 				;;
 			7)
-				Get_IPs
+				GetEnclosureInfo
 				;;
 			8)
-				GetDisksInDiskGroups
+				Get_IPs
 				;;
 			9)
-				GetInitiators
+				GetDisksInDiskGroups
 				;;
 			a)
-				GetInitiatorNaming
+				GetInitiators
 				;;
 			b)
-				GetHostPhyStatistics
+				GetInitiatorNaming
 				;;
 			c)
-				GetVolumes
+				GetHostPhyStatistics
 				;;
 			d)
-				GetSasBaseInitiatorIDs
+				GetVolumes
 				;;
 			e)
-				ResetHostSasLinks
+				GetSasBaseInitiatorIDs
 				;;
 			f)
-				ResetSCs
+				ResetHostSasLinks
 				;;
 			g)
-				ResetMCs
+				ResetSCs
 				;;
 			h)
-				RemoveAllDiskGroupsFromAllControllers
+				ResetMCs
 				;;
 			i)
-				RemoveAllInitiatorNickNames
+				RemoveAllDiskGroupsFromAllControllers
 				;;
 			j)
+				RemoveAllInitiatorNickNames
+				;;
+			k)
 				MapVolumes
 				;;
 			*)

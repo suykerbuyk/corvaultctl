@@ -2,6 +2,7 @@
 
 for P in $(zpool list | grep cvt | awk '{print $1}')
 do
+	umount "/${P}"
 	echo "zpool destroy $P"
 	zpool destroy $P
 done
