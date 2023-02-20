@@ -1041,7 +1041,7 @@ SelectTarget() {
 	cmd=(dialog --keep-tite --menu "Corvault Config Options:" 22 76 16)
 }
 ShowMenu() {
-	cmd=(dialog --keep-tite --menu "Corvault Config Options:" 22 76 16)
+	cmd=(dialog --keep-tite --defaultno --menu "Corvault Config Options:" 22 76 16)
 
 	options=(1 "ProvisionHighPerfBlock"
 		 2 "ProvisionForZFS16plus2"
