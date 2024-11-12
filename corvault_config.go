@@ -92,7 +92,7 @@ func GetCvtConfig() (cfg *CorvaultConfig, err error) {
 	if err != nil {
 		err = SaveCvtConfig(cfg)
 		if err != nil {
-			err = FMT.Errorf("could not create config file: %s %w", configFile, err)
+			err = fmt.Errorf("could not create config file: %s %w", configFile, err)
 			return
 		}
 	}
