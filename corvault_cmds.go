@@ -1,4 +1,4 @@
-//nolint
+// nolint
 package main
 
 import (
@@ -35,10 +35,10 @@ type CliGlobals struct {
 }
 
 type RegisterTargetCmd struct {
-	Name string `required help:"Named alias of the Seagate Enclosure target."`
-	Url  string `required help:"URL of the Seagate enclosure target."`
-	User string `required help:"user name to use to authenticate with the target."`
-	Pass string `help:"password to use to authenticate with the target"`
+	Name string `json:"name" binding:"required" help:"Named alias of the Seagate Enclosure target."`
+	Url  string `json:"url"  binding:"required" help:"URL of the Seagate enclosure target."`
+	User string `json:"user" binding:"required" help:"user name to use to authenticate with the target."`
+	Pass string `json:"pass" help:"password to use to authenticate with the target"`
 }
 
 func (aCmd *RegisterTargetCmd) Run(globals *CliGlobals) error {
@@ -60,8 +60,8 @@ func (aCmd *RegisterTargetCmd) AsJson() (jsonStr string, err error) {
 }
 
 type CvtRawCmd struct {
-	Target []string `required help:"named enclosure target" short:"t"`
-	Cmd    []string `arg passthrough:"" required help:"Pass through any command string to the targeted enclosure"`
+	Target []string `binding:"required" help:"named enclosure target" short:"t"`
+	Cmd    []string `binding:"required" help:"Pass through any command string to the targeted enclosure"`
 }
 
 func (aCmd *CvtRawCmd) Run(globals *CliGlobals) error {
@@ -81,28 +81,28 @@ func (aCmd *CvtRawCmd) AsJson() (jsonStr string, err error) {
 }
 
 type CvtShowCmd struct {
-	Target []string `required help:"named enclosure target" short:"t"`
+	Target []string `binding:"required" help:"named enclosure target" short:"t"`
 	Disks  struct {
-	} `cmd help:"Generates a report of disk present in the enclosure"`
+	} `help:"Generates a report of disk present in the enclosure"`
 	DiskGroups struct {
-	} `cmd help:"Generates a report of defined disk groups."`
+	} `help:"Generates a report of defined disk groups."`
 
 	AlertConditionHistory struct {
-	} `cmd help:"show alert condition history"`
+	} `help:"show alert condition history"`
 	AdvancedSettings struct {
-	} `cmd help:"show advanced settings"`
+	} `help:"show advanced settings"`
 	Certificates struct {
 		Json bool `negateable:"" optional:"" default:"false" help:"Flag to output certificates as json"`
-	} `cmd help:"show enclosure https certificates"`
+	} `help:"show enclosure https certificates"`
 	Volumes struct {
-	} `cmd help:"show volumes"`
+	} `help:"show volumes"`
 	Tester struct {
 		Fred struct {
-			Fred string `arg required help:"set fred=SomeValue"`
-		} `arg help:"fred is a nested argument, try fred=Argument"`
+			Fred string `binding:"required" help:"set fred=SomeValue"`
+		} `help:"fred is a nested argument, try fred=Argument"`
 		//Barney string `arg help:"set barney=SomeValue"`
 		Wilma bool `negatable:"" short:"w" help:"wilma is a nested flag, try --wilma"`
-	} `cmd help:"tester cmd"`
+	} `help:"tester cmd"`
 }
 
 func (aCmd *CvtShowCmd) AsJson() (jsonStr string, err error) {
@@ -136,7 +136,7 @@ func (aCmd *CvtShowCmd) Run(globals *CliGlobals, kCtx *kong.Context) error {
 
 type CLI struct {
 	CliGlobals
-	Register RegisterTargetCmd `cmd help:"Register an enclosure target to manage." short:"R"`
-	Show     CvtShowCmd        `cmd help:"Show commands"`
-	Raw      CvtRawCmd         `cmd help:"Send Raw command string to target enclosure"`
+	Register RegisterTargetCmd `help:"Register an enclosure target to manage." short:"R"`
+	Show     CvtShowCmd        `help:"Show commands"`
+	Raw      CvtRawCmd         `help:"Send Raw command string to target enclosure"`
 }

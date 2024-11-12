@@ -72,17 +72,17 @@ func validateConfigPath(path string) (err error) {
 	log.Info().Msg("validate config path")
 	s, err := os.Stat(path)
 	if err != nil {
-		err = fmt.Errorf("Config Error %w", err)
+		err = fmt.Errorf("config error %w", err)
 		return
 	}
 	if s.IsDir() {
-		return fmt.Errorf("Config: '%s' is a directory, not a normal file", path)
+		return fmt.Errorf("config: '%s' is a directory, not a normal file", path)
 	}
 	return nil
 }
 
 func SaveCvtConfig(cfg *CorvaultConfig) (err error) {
-	pp, err := cfg.PrettyPrint()
+	pp, _ := cfg.PrettyPrint()
 	err = ioutil.WriteFile(configFile, pp, 0666)
 	return
 }
@@ -92,19 +92,19 @@ func GetCvtConfig() (cfg *CorvaultConfig, err error) {
 	if err != nil {
 		err = SaveCvtConfig(cfg)
 		if err != nil {
-			err = fmt.Errorf("Could not create config file: %s %w", configFile, err)
+			err = FMT.Errorf("could not create config file: %s %w", configFile, err)
 			return
 		}
 	}
 	file, err := os.Open(configFile)
 	if err != nil {
-		err = fmt.Errorf("Config Error: %w", err)
+		err = fmt.Errorf("config Error: %w", err)
 		return
 	}
 	defer file.Close()
 	d := yaml.NewDecoder(file)
 	if err = d.Decode(&cfg); err != nil {
-		err = fmt.Errorf("Config Error %w", err)
+		err = fmt.Errorf("config Error %w", err)
 		return
 	}
 	return
